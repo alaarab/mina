@@ -1,63 +1,6 @@
 import AppIntents
 import Foundation
 
-/// Spoken amounts. Each case is a phrase Siri can match without the app
-/// running, so the list is a literal rather than something computed.
-enum FeedAmount: String, AppEnum {
-    case oz1, oz1_5, oz2, oz2_5, oz3, oz3_5, oz4, oz4_5, oz5, oz5_5, oz6, oz6_5, oz7, oz7_5, oz8, oz9, oz10
-    case ml30, ml40, ml50, ml60, ml70, ml80, ml90, ml100, ml110, ml120, ml130, ml140, ml150, ml160, ml180, ml200, ml210, ml240, ml270, ml300
-
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Amount")
-
-    static var caseDisplayRepresentations: [FeedAmount: DisplayRepresentation] = [
-        .oz1: DisplayRepresentation(title: "1 ounce", synonyms: ["1 oz", "one ounce"]),
-        .oz1_5: DisplayRepresentation(title: "1.5 ounces", synonyms: ["1.5 oz", "one and a half ounces"]),
-        .oz2: DisplayRepresentation(title: "2 ounces", synonyms: ["2 oz", "two ounces"]),
-        .oz2_5: DisplayRepresentation(title: "2.5 ounces", synonyms: ["2.5 oz", "two and a half ounces"]),
-        .oz3: DisplayRepresentation(title: "3 ounces", synonyms: ["3 oz", "three ounces"]),
-        .oz3_5: DisplayRepresentation(title: "3.5 ounces", synonyms: ["3.5 oz", "three and a half ounces"]),
-        .oz4: DisplayRepresentation(title: "4 ounces", synonyms: ["4 oz", "four ounces"]),
-        .oz4_5: DisplayRepresentation(title: "4.5 ounces", synonyms: ["4.5 oz", "four and a half ounces"]),
-        .oz5: DisplayRepresentation(title: "5 ounces", synonyms: ["5 oz", "five ounces"]),
-        .oz5_5: DisplayRepresentation(title: "5.5 ounces", synonyms: ["5.5 oz", "five and a half ounces"]),
-        .oz6: DisplayRepresentation(title: "6 ounces", synonyms: ["6 oz", "six ounces"]),
-        .oz6_5: DisplayRepresentation(title: "6.5 ounces", synonyms: ["6.5 oz", "six and a half ounces"]),
-        .oz7: DisplayRepresentation(title: "7 ounces", synonyms: ["7 oz", "seven ounces"]),
-        .oz7_5: DisplayRepresentation(title: "7.5 ounces", synonyms: ["7.5 oz", "seven and a half ounces"]),
-        .oz8: DisplayRepresentation(title: "8 ounces", synonyms: ["8 oz", "eight ounces"]),
-        .oz9: DisplayRepresentation(title: "9 ounces", synonyms: ["9 oz", "nine ounces"]),
-        .oz10: DisplayRepresentation(title: "10 ounces", synonyms: ["10 oz", "ten ounces"]),
-        .ml30: DisplayRepresentation(title: "30 milliliters", synonyms: ["30 ml", "thirty milliliters"]),
-        .ml40: DisplayRepresentation(title: "40 milliliters", synonyms: ["40 ml", "forty milliliters"]),
-        .ml50: DisplayRepresentation(title: "50 milliliters", synonyms: ["50 ml", "fifty milliliters"]),
-        .ml60: DisplayRepresentation(title: "60 milliliters", synonyms: ["60 ml", "sixty milliliters"]),
-        .ml70: DisplayRepresentation(title: "70 milliliters", synonyms: ["70 ml", "seventy milliliters"]),
-        .ml80: DisplayRepresentation(title: "80 milliliters", synonyms: ["80 ml", "eighty milliliters"]),
-        .ml90: DisplayRepresentation(title: "90 milliliters", synonyms: ["90 ml", "ninety milliliters"]),
-        .ml100: DisplayRepresentation(title: "100 milliliters", synonyms: ["100 ml", "one hundred milliliters"]),
-        .ml110: DisplayRepresentation(title: "110 milliliters", synonyms: ["110 ml"]),
-        .ml120: DisplayRepresentation(title: "120 milliliters", synonyms: ["120 ml"]),
-        .ml130: DisplayRepresentation(title: "130 milliliters", synonyms: ["130 ml"]),
-        .ml140: DisplayRepresentation(title: "140 milliliters", synonyms: ["140 ml"]),
-        .ml150: DisplayRepresentation(title: "150 milliliters", synonyms: ["150 ml"]),
-        .ml160: DisplayRepresentation(title: "160 milliliters", synonyms: ["160 ml"]),
-        .ml180: DisplayRepresentation(title: "180 milliliters", synonyms: ["180 ml"]),
-        .ml200: DisplayRepresentation(title: "200 milliliters", synonyms: ["200 ml"]),
-        .ml210: DisplayRepresentation(title: "210 milliliters", synonyms: ["210 ml"]),
-        .ml240: DisplayRepresentation(title: "240 milliliters", synonyms: ["240 ml"]),
-        .ml270: DisplayRepresentation(title: "270 milliliters", synonyms: ["270 ml"]),
-        .ml300: DisplayRepresentation(title: "300 milliliters", synonyms: ["300 ml"]),
-    ]
-
-    var milliliters: Double {
-        if rawValue.hasPrefix("oz") {
-            let number = Double(rawValue.dropFirst(2).replacingOccurrences(of: "_", with: ".")) ?? 0
-            return number * VolumeUnit.millilitersPerOunce
-        }
-        return Double(rawValue.dropFirst(2)) ?? 0
-    }
-}
-
 extension NursingSide: AppEnum {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Side")
     static var caseDisplayRepresentations: [NursingSide: DisplayRepresentation] = [

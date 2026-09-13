@@ -9,7 +9,7 @@ enum VolumeUnit: String, CaseIterable, Identifiable {
     var symbol: String { self == .ounces ? "oz" : "ml" }
     var title: String { self == .ounces ? "Ounces" : "Milliliters" }
     /// One tap on a stepper, in the display unit.
-    var step: Double { self == .ounces ? 0.5 : 10 }
+    var step: Double { self == .ounces ? 0.5 : 1 }
     var maximum: Double { self == .ounces ? 20 : 600 }
     var quickPicks: [Double] { self == .ounces ? [2, 3, 4, 5, 6] : [60, 90, 120, 150, 180] }
 
