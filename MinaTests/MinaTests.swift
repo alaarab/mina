@@ -505,3 +505,13 @@ final class BabyChoiceTests: XCTestCase {
         Prefs.selectedBabyID = nil
     }
 }
+
+
+final class ChangelogTests: XCTestCase {
+    func testChangelogParsesAndMatchesAppVersion() {
+        let sections = Changelog.sections
+        XCTAssertFalse(sections.isEmpty, "CHANGELOG.md must be bundled")
+        XCTAssertEqual(sections.first?.version, Changelog.current, "newest changelog entry must match MARKETING_VERSION")
+        XCTAssertTrue(sections.first!.groups.contains { $0.title == "New" && !$0.items.isEmpty })
+    }
+}

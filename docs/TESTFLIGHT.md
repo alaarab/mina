@@ -34,11 +34,19 @@ uploads it. Each run auto-increments the build number. It needs one file:
 
 ## Version numbers
 
-`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml` feed both the
-app and the widget Info.plists. `release.py` sets the build number from its
-counter on every upload; bump the marketing version in `project.yml` (or pass
-`--marketing-version`) when the App Store version changes. App Store Connect
+The version is `0.0.<build>`, so the two numbers never drift: `release.py`
+sets both from its counter on every upload (`--marketing-version` overrides).
+`project.yml` carries the current pair for local builds. App Store Connect
 rejects a build number it has already seen.
+
+## Changelog
+
+`CHANGELOG.md` at the repo root is the single source: the app bundles it (a
+pre-build step copies it into Resources) and shows the newest section once
+after an update and the whole thing under Settings → What's new; `asc-fill.py`
+pushes the newest section as the App Store "What's New". A test fails if the
+newest heading doesn't match the app version, so add a `## 0.0.N` section
+before each upload.
 
 ## Each release
 

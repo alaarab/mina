@@ -12,8 +12,8 @@ configFiles:
 
 settings:
   base:
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "0.0.16"
+    CURRENT_PROJECT_VERSION: 16
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     TARGETED_DEVICE_FAMILY: "1"
@@ -29,6 +29,11 @@ targets:
       - path: Mina
         excludes:
           - "**/.DS_Store"
+    preBuildScripts:
+      - name: Bundle changelog
+        script: cp "$SRCROOT/CHANGELOG.md" "$SRCROOT/Mina/Resources/CHANGELOG.md"
+        outputFiles:
+          - $(SRCROOT)/Mina/Resources/CHANGELOG.md
     info:
       path: Mina/Resources/Info.plist
       properties:
@@ -144,8 +149,8 @@ configFiles:
 
 settings:
   base:
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "0.0.16"
+    CURRENT_PROJECT_VERSION: 16
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     TARGETED_DEVICE_FAMILY: "1"
