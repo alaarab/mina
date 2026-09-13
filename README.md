@@ -51,11 +51,11 @@ the schema deployed to Production in the CloudKit Console first.
   buttons for the last bottle amount, pee, poop, and sleep/awake.
 - **Last feed** (small, plus lock-screen circular/rectangular/inline): time since
   the last feed or how long she's been asleep. Redacted until the phone is unlocked.
-- **Partner alerts**: "Mom fed Mina: 4 oz bottle at 2:15 PM" on the other phone.
-  On the log owner's phone these come through a CloudKit push and arrive even
-  when Mina has been force-quit; on a partner's phone they arrive while the app
-  is in the background. Only the phone that's on (see Who's on) gets them.
-  Toggle in Settings.
+- **Partner alerts**: "Mom fed Mina: 4 oz bottle at 2:15 PM" on the other phone,
+  while the app is in the background. Several entries arriving together become
+  one summary ("Kiley logged 3 things for Mina"), only entries from the last
+  90 minutes alert, and never more than six alerts an hour. Only the phone
+  that's on (see Who's on) gets them. Toggle in Settings.
 
 Widgets read and write the store through the App Group; the app exports widget
 entries to iCloud the next time it runs, so a widget-logged feed reaches the
@@ -89,10 +89,6 @@ Tap **I'm on** on Today and only your phone rings the alarm and gets partner
 alerts; **Hand off** gives it back. Settings → Who's on → Shifts sets a nightly
 schedule (blocks can cross midnight) that both phones follow. With nothing set,
 both phones get everything. Any number of caregivers can be on the share.
-
-Partner alerts on the log owner's phone use a CloudKit subscription, so they
-arrive even when Mina has been force-quit. The partner's phone gets them
-through the silent push while the app is in the background.
 
 ## Today's goals and the Sunday digest
 

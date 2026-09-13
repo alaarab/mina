@@ -8,6 +8,8 @@ import UIKit
 /// remote pushes, and the tab bar that picks between the baby's log and
 /// onboarding.
 
+// MARK: App
+
 @main
 struct MinaApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -75,6 +77,8 @@ struct MinaApp: App {
     }
 }
 
+// MARK: Delegates
+
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -103,6 +107,8 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 }
 
+// MARK: Screens
+
 struct RootView: View {
     @Environment(\.managedObjectContext) private var context
     @FetchRequest(fetchRequest: Baby.request(), animation: .default) private var babies: FetchedResults<Baby>
@@ -116,11 +122,7 @@ struct RootView: View {
             if let baby = persistence.preferredBaby(from: Array(babies)) {
                 MainTabs(baby: baby).id(baby.objectID)
                     .task { WeeklyDigest.schedule(for: baby, in: context) }
-                    .task {
-                        if ShareManager.shared.existingShare(for: baby) != nil {
-                            PartnerAlerts.shared.registerCloudSubscriptionIfOwner(babyName: baby.displayName, isOwner: !persistence.isShared(baby))
-                        }
-                    }
+                    .task { PartnerAlerts.shared.removeCloudSubscriptionIfPresent() }
             } else {
                 OnboardingView()
             }

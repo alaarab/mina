@@ -42,12 +42,19 @@ enum FeedAlarm {
         return lastFeed.addingTimeInterval(Double(gapMinutes) * 60)
     }
 
+    /// Runs the scheduling work one at a time. Today re-arms on appear, on
+    /// every entry change and on every remote change, so two of these can
+    /// easily overlap; without the queue both would pass the "already armed"
+    /// check, and the alarm the loser scheduled would ring with no way to
+    /// cancel it, since only the last id reaches `idKey`.
+    private static let scheduling = SerialTasks()
+
     /// Schedules the next alarm once per feed. A screen refresh never re-arms
     /// an alarm that already fired; only a newer feed (or a settings change) does.
     static func reschedule(lastFeed: Date?, prediction: FeedPrediction?, babyName: String, now: Date = .now, force: Bool = false) {
         #if canImport(AlarmKit)
         guard #available(iOS 26.0, *) else { return }
-        Task {
+        scheduling.enqueue {
             let manager = AlarmManager.shared
             let armedFor = Prefs.defaults.object(forKey: armedForKey) as? Date
             let hasAlarm = Prefs.defaults.string(forKey: idKey) != nil
@@ -88,14 +95,18 @@ enum FeedAlarm {
         #endif
     }
 
+    /// Queued behind any scheduling already under way, so a cancel can't clear
+    /// the stored id a half-finished `reschedule` is about to write.
     static func cancel() {
         #if canImport(AlarmKit)
         guard #available(iOS 26.0, *) else { return }
-        if let old = Prefs.defaults.string(forKey: idKey).flatMap(UUID.init(uuidString:)) { try? AlarmManager.shared.cancel(id: old) }
-        // Belt and braces: cancel anything of ours the system still holds.
-        if let all = try? AlarmManager.shared.alarms { for alarm in all { try? AlarmManager.shared.cancel(id: alarm.id) } }
-        Prefs.defaults.removeObject(forKey: idKey)
-        Prefs.defaults.removeObject(forKey: armedForKey)
+        scheduling.enqueue {
+            if let old = Prefs.defaults.string(forKey: idKey).flatMap(UUID.init(uuidString:)) { try? AlarmManager.shared.cancel(id: old) }
+            // Belt and braces: cancel anything of ours the system still holds.
+            if let all = try? AlarmManager.shared.alarms { for alarm in all { try? AlarmManager.shared.cancel(id: alarm.id) } }
+            Prefs.defaults.removeObject(forKey: idKey)
+            Prefs.defaults.removeObject(forKey: armedForKey)
+        }
         #endif
     }
 }

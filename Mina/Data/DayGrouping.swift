@@ -32,8 +32,18 @@ enum DayGrouping {
         var result: [(day: Date, range: Range<Int>)] = []
         var start = entries.startIndex
         var current: Date?
+        // Where the current day ends. A run of entries inside it needs no
+        // calendar arithmetic at all, which matters on a list of years.
+        var currentEnd: Date?
         for index in entries.indices {
-            let day = calendar.startOfDay(for: entries[index].startedAt ?? missing)
+            let at = entries[index].startedAt ?? missing
+            let day: Date
+            if let current, let currentEnd, at >= current, at < currentEnd {
+                day = current
+            } else {
+                day = calendar.startOfDay(for: at)
+                currentEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+            }
             if let existing = current, existing != day {
                 result.append((day: existing, range: start..<index))
                 start = index

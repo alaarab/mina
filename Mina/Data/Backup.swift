@@ -61,6 +61,7 @@ enum Backup {
         let known = Set(try context.fetch(existing).compactMap(\.id))
         var added = 0
         for item in file.entries where !known.contains(item.id) {
+            // The model names "LogEntry" as this exact class, so the cast holds.
             let entry = NSEntityDescription.insertNewObject(forEntityName: "LogEntry", into: context) as! LogEntry
             entry.id = item.id
             entry.createdAt = .now
@@ -82,8 +83,11 @@ enum Backup {
             if let store = baby.objectID.persistentStore { context.assign(entry, to: store) }
             added += 1
         }
-        if added > 0 { try context.save(); Logbook.widgetsChanged() }
-        if baby.birthDate == nil, let birthDate = file.birthDate { baby.birthDate = birthDate; try context.save() }
+        var learnedBirthDate = false
+        if baby.birthDate == nil, let birthDate = file.birthDate { baby.birthDate = birthDate; learnedBirthDate = true }
+        if added > 0 || learnedBirthDate { try context.save() }
+        // One pass of the after-save hooks for the whole file, not one per entry.
+        if added > 0 { Logbook.shared.didChangeEntries(for: baby, in: context) }
         return added
     }
 

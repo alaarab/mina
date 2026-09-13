@@ -4,6 +4,12 @@ import CoreData
 import SwiftUI
 import UIKit
 
+/// The iCloud side of a two-phone log: making the share, accepting the
+/// partner's, saying who is on it, and watching the mirroring for the line
+/// Settings shows when sync is stuck.
+
+// MARK: The share
+
 /// Creates the CloudKit share for the baby, accepts one from a partner, and
 /// describes who is on it.
 @MainActor
@@ -48,6 +54,8 @@ final class ShareManager: ObservableObject {
                     try await Task.sleep(for: .seconds(30))
                     throw ShareError.timedOut
                 }
+                // The group has two tasks and neither returns nil, so the
+                // first result always exists; a throw comes back as a throw.
                 let first = try await group.next()!
                 group.cancelAll()
                 return first
@@ -94,8 +102,10 @@ final class ShareManager: ObservableObject {
     }
 
     /// Everyone on the share, with what they can do. Owner first.
-    func participants(for baby: Baby) -> [Participant] {
-        guard let share = existingShare(for: baby) else { return [] }
+    /// Takes the share rather than the baby: a screen that already looked it
+    /// up should not pay for a second `fetchShares` on every redraw.
+    func participants(of share: CKShare?) -> [Participant] {
+        guard let share else { return [] }
         let formatter = PersonNameComponentsFormatter()
         formatter.style = .short
         return share.participants.map { participant in
@@ -147,6 +157,8 @@ final class ShareManager: ObservableObject {
     }
 }
 
+// MARK: Share sheet
+
 struct CloudSharingView: UIViewControllerRepresentable {
     let share: CKShare
     let container: CKContainer
@@ -174,6 +186,8 @@ struct CloudSharingView: UIViewControllerRepresentable {
         func itemType(for csc: UICloudSharingController) -> String? { "com.alaarab.mina.log" }
     }
 }
+
+// MARK: Sync health
 
 /// Watches CloudKit import/export events so Settings can say whether sync is
 /// healthy, and why not when it isn't.

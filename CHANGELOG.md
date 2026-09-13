@@ -2,6 +2,12 @@
 
 Newest first. Versions are 0.0.<build>. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
+## 0.0.19
+
+### Fixed
+- A sync catch-up could send dozens of partner alerts at once. Alerts are now one summary per sync, only for entries from the last 90 minutes, and at most six an hour.
+- Faster Today screen and less battery: totals are computed once per refresh and Spotlight indexing is coalesced.
+
 ## 0.0.18
 
 ### New

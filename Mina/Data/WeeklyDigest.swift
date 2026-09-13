@@ -1,4 +1,3 @@
-import BackgroundTasks
 import CoreData
 import Foundation
 import UserNotifications
@@ -9,7 +8,6 @@ import UserNotifications
 enum WeeklyDigest {
     static let onKey = "weeklyDigestOn"
     static let identifier = "weekly-digest"
-    static let taskID = "com.alaarab.mina.weekly-digest"
 
     static var isOn: Bool {
         get { Prefs.defaults.object(forKey: onKey) == nil ? true : Prefs.defaults.bool(forKey: onKey) }

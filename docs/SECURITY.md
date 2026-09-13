@@ -106,6 +106,6 @@ report through the repository rather than privately.
 timestamp) so every participant sees it; the device id is a random UUID with no
 link to the person or the hardware. The feed alarm is scheduled locally through
 AlarmKit and never writes to the log: its Stop button only records a dismissal
-time on the phone. On the log owner's phone, partner alerts come from a CloudKit
-query subscription whose notification text is a fixed sentence with the baby's
-name; the entry itself is not in the push payload.
+time on the phone. Partner alerts are built on the phone from entries that arrived through
+iCloud's silent push; no notification text travels through Apple's push
+service. Alerts are limited to recent entries, batched, and capped per hour.

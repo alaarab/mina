@@ -5,7 +5,9 @@ import WidgetKit
 /// The one door into the log. Drafts and snapshots carry entries in and out of
 /// Core Data as plain values, and `Logbook` owns every write so the app, the
 /// widgets and Siri agree on how an entry is made, which store it lands in, and
-/// who gets credit for the 3 AM feed.
+/// who gets credit for the 3 AM feed. It also owns what happens after a write
+/// (the alarm, the digest, the widgets) and the two small helpers at the
+/// bottom that keep a burst of writes from doing that work a hundred times.
 
 // MARK: Values
 
@@ -137,10 +139,18 @@ final class Logbook: @unchecked Sendable {
         guard save else { return entry }
         try context.save()
         if draft.kind == .nursing, draft.endedAt != nil, let side = draft.side, side != .both { Prefs.lastNursingSide = side }
-        if draft.kind.isFeed { rearmFeedAlarm(for: baby, in: context) }
+        didChangeEntries(for: baby, in: context, feedChanged: draft.kind.isFeed)
+        return entry
+    }
+
+    /// The after-save work: re-arm the feed alarm, refresh the digest, reload
+    /// the widgets. `add` runs it once per entry; bulk paths (import, merge,
+    /// the demo seed, a Nanit sync) save with `save: false` and call this once
+    /// at the end, so a hundred entries don't schedule a hundred alarms.
+    func didChangeEntries(for baby: Baby, in context: NSManagedObjectContext, feedChanged: Bool = true) {
+        if feedChanged { rearmFeedAlarm(for: baby, in: context) }
         Self.anyEntryLogged?(baby, context)
         Self.widgetsChanged()
-        return entry
     }
 
     func apply(_ draft: EntryDraft, to entry: LogEntry) {
@@ -169,10 +179,21 @@ final class Logbook: @unchecked Sendable {
     }
 
     /// Widgets show the last feed and today's counts; tell them when those move.
+    /// In the app, a burst of saves (an iCloud catch-up, an import) becomes one
+    /// reload now and one after the burst; a widget's own tap reloads at once,
+    /// since its process may not live long enough for a delayed one.
     static func widgetsChanged() {
-        WidgetCenter.shared.reloadAllTimelines()
-        if !PersistenceController.isExtension { EntryIndex.refresh() }
+        if PersistenceController.isExtension {
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
+        widgetReloads.call {
+            WidgetCenter.shared.reloadAllTimelines()
+            EntryIndex.refresh()
+        }
     }
+
+    private static let widgetReloads = Throttle(interval: 1)
 
     func entries(for baby: Baby, from start: Date, to end: Date? = nil, in context: NSManagedObjectContext) -> [LogEntry] {
         (try? context.fetch(LogEntry.request(for: baby, from: start, to: end))) ?? []
@@ -315,7 +336,7 @@ final class Logbook: @unchecked Sendable {
         context.delete(local)
         try context.save()
         if Prefs.selectedBabyID == local.id { Prefs.selectedBabyID = nil }
-        Self.widgetsChanged()
+        didChangeEntries(for: target, in: context)
         return entries.count
     }
 
@@ -350,5 +371,64 @@ final class Logbook: @unchecked Sendable {
             }
             return try work(context, baby)
         }
+    }
+}
+
+// MARK: Coalescing
+
+/// Collapses a burst of calls into two runs: the first call runs at once, and
+/// every call that lands inside the next `interval` is folded into a single
+/// trailing run with the most recent work. A single tap is never delayed; a
+/// CloudKit catch-up of a hundred entries reloads twice, not a hundred times.
+///
+/// Safe to call from any thread; the work runs on `queue`.
+final class Throttle: @unchecked Sendable {
+    private let interval: TimeInterval
+    private let queue: DispatchQueue
+    private let lock = NSLock()
+    private var windowEnd: DispatchTime?
+    private var trailing: (() -> Void)?
+
+    init(interval: TimeInterval, queue: DispatchQueue = .main) {
+        self.interval = interval
+        self.queue = queue
+    }
+
+    func call(_ work: @escaping () -> Void) {
+        lock.lock()
+        let now = DispatchTime.now()
+        if let end = windowEnd, now < end {
+            let alreadyQueued = trailing != nil
+            trailing = work
+            lock.unlock()
+            if !alreadyQueued { queue.asyncAfter(deadline: end) { self.fireTrailing() } }
+            return
+        }
+        windowEnd = now + interval
+        lock.unlock()
+        queue.async(execute: work)
+    }
+
+    private func fireTrailing() {
+        lock.lock()
+        let work = trailing
+        trailing = nil
+        windowEnd = DispatchTime.now() + interval
+        lock.unlock()
+        work?()
+    }
+}
+
+/// Runs async jobs strictly one after another, in the order they were queued.
+/// Used where two overlapping runs would double up, such as scheduling an
+/// alarm or rebuilding the Spotlight index.
+final class SerialTasks: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last: Task<Void, Never>?
+
+    func enqueue(_ job: @escaping @Sendable () async -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        let previous = last
+        last = Task { await previous?.value; await job() }
     }
 }

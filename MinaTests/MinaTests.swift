@@ -508,11 +508,14 @@ final class BabyChoiceTests: XCTestCase {
 
 
 final class ChangelogTests: XCTestCase {
-    func testChangelogParsesAndMatchesAppVersion() {
+    func testChangelogParsesAndMatchesAppVersion() throws {
         let sections = Changelog.sections
         XCTAssertFalse(sections.isEmpty, "CHANGELOG.md must be bundled")
         XCTAssertEqual(sections.first?.version, Changelog.current, "newest changelog entry must match MARKETING_VERSION")
-        XCTAssertTrue(sections.first!.groups.contains { $0.title == "New" && !$0.items.isEmpty })
+        // A release with only fixes in it is a normal release, so this asks
+        // for a group with something in it rather than for "New" by name.
+        let newest = try XCTUnwrap(sections.first)
+        XCTAssertTrue(newest.groups.contains { !$0.items.isEmpty }, "the newest entry must say something")
     }
 }
 
@@ -548,5 +551,122 @@ final class WeeklyDigestTests: XCTestCase {
         let sunday = WeeklyDigest.nextFireDate(after: Date(timeIntervalSince1970: 1_780_000_000))
         XCTAssertEqual(Calendar.current.component(.weekday, from: sunday), 1)
         XCTAssertEqual(Calendar.current.component(.hour, from: sunday), 19)
+    }
+}
+
+
+final class PartnerAlertBatchingTests: XCTestCase {
+    func testBatchBecomesOneSummaryAndRateLimits() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Mina", birthDate: .now, in: context)
+        var entries: [LogEntry] = []
+        for (i, kind) in [EntryKind.bottle, .diaper, .sleep, .note].enumerated() {
+            var d = EntryDraft(kind: kind, startedAt: Date.now.addingTimeInterval(Double(-i * 600)))
+            d.amountML = 120; d.diaper = .wet; d.loggedBy = "Kiley"; d.note = "hi"
+            if kind == .sleep { d.endedAt = d.startedAt.addingTimeInterval(1800) }
+            entries.append(try logbook.add(d, to: baby, in: context))
+        }
+        let summary = PartnerAlerts.summary(for: entries, unit: .ounces)
+        XCTAssertEqual(summary.title, "Kiley logged 4 things for Mina")
+        XCTAssertTrue(summary.body.contains("and 1 more"), summary.body)
+        Prefs.defaults.removeObject(forKey: "partnerAlerts.posted")
+        for _ in 0..<PartnerAlerts.maxAlertsPerHour { PartnerAlerts.recordAlertPosted(now: .now) }
+        XCTAssertEqual(PartnerAlerts.alertsPostedRecently(now: .now), PartnerAlerts.maxAlertsPerHour)
+        XCTAssertEqual(PartnerAlerts.alertsPostedRecently(now: .now.addingTimeInterval(3601)), 0)
+        Prefs.defaults.removeObject(forKey: "partnerAlerts.posted")
+    }
+}
+
+
+final class CoalescingTests: XCTestCase {
+    /// Holds values written from a background queue.
+    private final class Log: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: [Int] = []
+        func append(_ value: Int) { lock.lock(); stored.append(value); lock.unlock() }
+        var values: [Int] { lock.lock(); defer { lock.unlock() }; return stored }
+    }
+
+    func testThrottleRunsTheFirstCallAtOnceAndFoldsTheRestIntoOne() {
+        let log = Log()
+        let throttle = Throttle(interval: 0.5, queue: DispatchQueue(label: "throttle-test"))
+        let leading = expectation(description: "first call runs straight away")
+        let trailing = expectation(description: "the burst runs once at the end")
+
+        throttle.call { log.append(0); leading.fulfill() }
+        for value in 1...5 { throttle.call { log.append(value); if value == 5 { trailing.fulfill() } } }
+
+        wait(for: [leading, trailing], timeout: 5)
+        XCTAssertEqual(log.values, [0, 5], "five calls inside the window become one, carrying the newest work")
+    }
+
+    func testSerialTasksRunOneAtATimeInOrder() async {
+        let log = Log()
+        let tasks = SerialTasks()
+        let done = expectation(description: "all three ran")
+        for value in 1...3 {
+            tasks.enqueue {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                log.append(value)
+                if value == 3 { done.fulfill() }
+            }
+        }
+        await fulfillment(of: [done], timeout: 5)
+        XCTAssertEqual(log.values, [1, 2, 3], "queued work never overlaps or reorders")
+    }
+}
+
+
+final class BulkWriteTests: XCTestCase {
+    /// A file of entries must refresh the digest, the alarm and the widgets
+    /// once, not once per entry: that is what turned an import into a burst.
+    func testImportRunsTheAfterSaveHooksOncePerFile() throws {
+        let source = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: source)
+        let context = source.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        for milliliters in [90.0, 120.0, 150.0] {
+            var draft = EntryDraft(kind: .bottle)
+            draft.amountML = milliliters
+            try logbook.add(draft, to: baby, in: context)
+        }
+        let data = try Backup.exportData(baby: baby, in: context)
+
+        let other = PersistenceController(inMemory: true)
+        let target = try Logbook(persistence: other).createBaby(name: "Test", birthDate: .now, in: other.container.viewContext)
+        let previousAny = Logbook.anyEntryLogged
+        let previousFeed = Logbook.feedLogged
+        defer { Logbook.anyEntryLogged = previousAny; Logbook.feedLogged = previousFeed }
+        var digests = 0
+        var alarms = 0
+        Logbook.anyEntryLogged = { _, _ in digests += 1 }
+        Logbook.feedLogged = { _, _ in alarms += 1 }
+
+        XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 3)
+        XCTAssertEqual(digests, 1, "one digest rebuild for the whole file")
+        XCTAssertEqual(alarms, 1, "one alarm re-arm for the whole file")
+        XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 0)
+        XCTAssertEqual(digests, 1, "an import that adds nothing schedules nothing")
+        XCTAssertEqual(alarms, 1)
+    }
+
+    /// Merging a local log into a shared one is the other bulk path.
+    func testMergeRunsTheAfterSaveHooksOnce() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let local = try logbook.createBaby(name: "Local", birthDate: .now, in: context)
+        let shared = try logbook.createBaby(name: "Shared", birthDate: .now, in: context)
+        for _ in 0..<4 { try logbook.add(EntryDraft(kind: .diaper), to: local, in: context) }
+
+        let previousAny = Logbook.anyEntryLogged
+        defer { Logbook.anyEntryLogged = previousAny }
+        var digests = 0
+        Logbook.anyEntryLogged = { _, _ in digests += 1 }
+        XCTAssertEqual(try logbook.merge(local, into: shared, in: context), 4)
+        XCTAssertEqual(digests, 1, "four moved entries, one refresh")
+        Prefs.selectedBabyID = nil
     }
 }

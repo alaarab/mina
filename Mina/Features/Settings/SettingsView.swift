@@ -9,6 +9,8 @@ import UserNotifications
 /// Siri phrases. Each section writes straight through to the store or to
 /// `Prefs`, so there is no Save button anywhere on this screen.
 
+// MARK: Screen
+
 struct SettingsView: View {
     @ObservedObject var baby: Baby
 
@@ -84,7 +86,7 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(preparingShare || persistence.isShared(baby))
-                    let people = sharing.participants(for: baby)
+                    let people = sharing.participants(of: share)
                     ForEach(people) { person in
                         HStack {
                             Text(person.isOwner ? "\(person.name) (owner)" : person.name)
@@ -285,9 +287,6 @@ struct SettingsView: View {
             }
             .errorAlert($sharing.error, title: "Sharing problem")
             .task {
-                if sharing.existingShare(for: baby) != nil {
-                    PartnerAlerts.shared.registerCloudSubscriptionIfOwner(babyName: baby.displayName, isOwner: !persistence.isShared(baby))
-                }
                 await sync.refreshAccount()
                 notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
             }
@@ -314,6 +313,8 @@ struct SettingsView: View {
     }
 }
 
+
+// MARK: Another baby
 
 /// A second child (or twins): a new local log you can share separately.
 struct AddBabySheet: View {
@@ -353,6 +354,8 @@ struct AddBabySheet: View {
     }
 }
 
+
+// MARK: Shifts
 
 /// A nightly schedule: blocks of time with a name on each. Stored on the
 /// shared baby so both phones see the same plan.
@@ -410,6 +413,8 @@ struct ShiftsView: View {
     }
 }
 
+
+// MARK: Goals
 
 struct GoalsSettingsView: View {
     @ObservedObject var baby: Baby

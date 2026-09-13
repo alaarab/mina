@@ -105,9 +105,6 @@ final class NanitSync: ObservableObject {
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.refreshTaskID)
     }
 
-    /// The name Settings and the docs use for `unlink()`.
-    func disconnect() { unlink() }
-
     private func validToken() async throws -> String {
         guard var current = tokens else { throw NanitError.sessionExpired }
         if Date.now.timeIntervalSince(current.issuedAt) > 50 * 60 {
@@ -151,13 +148,17 @@ final class NanitSync: ObservableObject {
         let context = persistence.container.viewContext
         guard let target = Logbook.shared.currentBaby(in: context) else { return }
 
+        // Every event lands in one save, and the after-save hooks run once for
+        // the batch rather than once per nap.
+        var changed = false
         for event in events where event.start >= floor {
             if !processed.contains(event.startID) {
                 var draft = EntryDraft(kind: .sleep, startedAt: event.start)
                 draft.endedAt = event.end
                 draft.loggedBy = Self.source
                 draft.label = "nanit:\(event.startID)"
-                try Logbook.shared.add(draft, to: target, in: context)
+                try Logbook.shared.add(draft, to: target, in: context, save: false)
+                changed = true
                 processed.insert(event.startID)
                 if let endID = event.endID { processed.insert(endID) }
             } else if let endID = event.endID, let end = event.end, !processed.contains(endID) {
@@ -166,11 +167,14 @@ final class NanitSync: ObservableObject {
                 request.fetchLimit = 1
                 if let entry = try context.fetch(request).first, entry.endedAt == nil {
                     entry.endedAt = end
-                    try context.save()
-                    Logbook.widgetsChanged()
+                    changed = true
                 }
                 processed.insert(endID)
             }
+        }
+        if changed {
+            try context.save()
+            Logbook.shared.didChangeEntries(for: target, in: context, feedChanged: false)
         }
         Prefs.defaults.set(Array(processed.sorted().suffix(1000)), forKey: Self.processedKey)
     }

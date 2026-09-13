@@ -37,6 +37,8 @@ enum FeedAmount: String, AppEnum {
     case ml281, ml282, ml283, ml284, ml285, ml286, ml287, ml288, ml289, ml290
     case ml291, ml292, ml293, ml294, ml295, ml296, ml297, ml298, ml299, ml300
 
+    // MARK: Spoken forms
+
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Amount")
 
     static var caseDisplayRepresentations: [FeedAmount: DisplayRepresentation] = [
@@ -351,6 +353,8 @@ enum FeedAmount: String, AppEnum {
         .ml299: DisplayRepresentation(title: "299 milliliters", synonyms: ["299 ml", "299 mils", "299 millilitres"]),
         .ml300: DisplayRepresentation(title: "300 milliliters", synonyms: ["300 ml", "300 mils", "300 millilitres"]),
     ]
+
+    // MARK: Value
 
     var milliliters: Double {
         if rawValue.hasPrefix("oz") {

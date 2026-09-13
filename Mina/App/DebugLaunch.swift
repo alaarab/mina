@@ -72,6 +72,7 @@ enum DebugLaunch {
             try add(.note, day: 3, hour: 11) { $0.note = "First real smile at Mom" }
             try add(.sleep, day: 0, hour: Double(calendar.component(.hour, from: now)) - 0.7)
             try context.save()
+            logbook.didChangeEntries(for: baby, in: context)
         } catch {
             assertionFailure("demo seed failed: \(error)")
         }
