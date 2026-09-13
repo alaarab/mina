@@ -24,6 +24,7 @@ private struct TodayContent: View {
     @State private var sheet: QuickSheet?
     @State private var editing: LogEntry?
     @State private var error: String?
+    @State private var asking = false
 
     private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
 
@@ -64,6 +65,14 @@ private struct TodayContent: View {
             }
             .background(MinaTheme.canvas.ignoresSafeArea())
             .navigationTitle(baby.displayName)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { asking = true } label: { Label("Ask", systemImage: "sparkles") }
+                }
+            }
+            .sheet(isPresented: $asking) {
+                AskView(baby: baby, stats: TrendMath.stats(entries: Array(entries), days: 2, now: now), recent: entries.prefix(12).map { "\(($0.startedAt ?? now).formatted(.dateTime.weekday(.abbreviated).hour().minute())): \($0.title(unit: unit, now: now))" }, unit: unit)
+            }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
                 case .bottle: BottleSheet(unit: unit) { log($0) }

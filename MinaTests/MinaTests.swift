@@ -262,3 +262,30 @@ final class BabyWeightTests: XCTestCase {
         }
     }
 }
+
+
+final class AskContextTests: XCTestCase {
+    func testContextListsStageAndDays() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let baby = try logbook.createBaby(name: "Test", birthDate: now.addingTimeInterval(-20 * 86_400), in: context)
+        var draft = EntryDraft(kind: .bottle, startedAt: now.addingTimeInterval(-3600))
+        draft.amountML = 120
+        try logbook.add(draft, to: baby, in: context)
+        let entries = logbook.entries(for: baby, from: .distantPast, in: context)
+        let stats = TrendMath.stats(entries: entries, days: 3, now: now)
+        let text = AskContext.build(babyName: "Test", age: baby.ageDescription(on: now), stage: Guidance.stage(forAgeDays: 20), stats: stats, recent: ["now: Bottle · 4 oz"], unit: .ounces)
+        XCTAssertTrue(text.contains("Stage: Weeks 3–4"))
+        XCTAssertTrue(text.contains("4 oz"), "today's bottle total should appear")
+        XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.contains(": ") && $0.contains(", ") }.count >= 3, true)
+        XCTAssertTrue(AskContext.instructions.contains("Never diagnose"))
+    }
+
+    func testRelativeDay() {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        XCTAssertEqual(RelativeDay.today.date(now: now), now)
+        XCTAssertEqual(RelativeDay.yesterday.date(now: now), Calendar.current.date(byAdding: .day, value: -1, to: now))
+    }
+}
