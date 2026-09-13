@@ -280,7 +280,6 @@ extension LogEntry {
     }
     var isOngoingSleep: Bool { kind == .sleep && endedAt == nil }
     var isOngoingNursing: Bool { kind == .nursing && endedAt == nil }
-    var isOngoing: Bool { isOngoingSleep || isOngoingNursing }
 
     func duration(now: Date = .now) -> TimeInterval? {
         guard let startedAt, kind.isTimed else { return nil }

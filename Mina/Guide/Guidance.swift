@@ -5,6 +5,8 @@ import Foundation
 /// guidance, with the stages laid end to end so every day of her first year
 /// falls in exactly one.
 
+// MARK: Values
+
 /// Typical ranges for a stage, used both in the guide and as "expect" hints
 /// on the Today screen.
 struct Expectation {
@@ -38,16 +40,13 @@ struct GuideStage: Identifiable {
     let watchFor: [String]
 }
 
+// MARK: The content
+
 /// General newborn ranges in the spirit of AAP guidance. Not medical advice;
 /// the pediatrician who has actually met the baby always wins.
 enum Guidance {
     static func stage(forAgeDays days: Int) -> GuideStage {
         stages.first { $0.ageDays.contains(max(0, days)) } ?? stages[stages.count - 1]
-    }
-
-    static func next(after stage: GuideStage) -> GuideStage? {
-        guard let index = stages.firstIndex(where: { $0.id == stage.id }), index + 1 < stages.count else { return nil }
-        return stages[index + 1]
     }
 
     static let disclaimer = "These are general ranges drawn from pediatric guidance. Every baby is different; her pediatrician knows her, this app does not. Not medical advice."

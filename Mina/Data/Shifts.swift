@@ -61,9 +61,4 @@ enum Shifts {
         baby.onDutySince = nil
         try context.save()
     }
-
-    static func minuteText(_ minute: Int) -> String {
-        let date = Calendar.current.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: .now) ?? .now
-        return Format.time(date)
-    }
 }

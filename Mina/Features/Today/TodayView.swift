@@ -45,31 +45,74 @@ private struct TodayContent: View {
         _entries = FetchRequest(fetchRequest: LogEntry.request(for: baby, from: start), animation: .default)
     }
 
-    private var sleeping: LogEntry? { entries.first { $0.isOngoingSleep } }
-    private var nursing: LogEntry? { entries.first { $0.isOngoingNursing } }
-    private var lastFeed: LogEntry? { entries.first { $0.kind.isFeed } }
-    private var summary: DaySummary { DaySummary(entries: Array(entries), day: now, now: now) }
-    private var stage: GuideStage? { baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)) }
-    private var feedPrediction: FeedPrediction? {
-        let times = entries.filter { $0.kind.isFeed }.compactMap(\.startedAt)
-        return Predictor.nextFeed(feedTimes: times, stage: stage, now: now)
-    }
-    private var napPrediction: NapPrediction? {
-        guard sleeping == nil else { return nil }
-        let lastWake = entries.filter { $0.kind == .sleep && $0.endedAt != nil }.compactMap(\.endedAt).max()
-        return Predictor.nextNap(lastWake: lastWake, ageDays: baby.ageDays(on: now), now: now)
+    /// One pass over the fetch: everything the screen shows about today,
+    /// worked out together instead of by six separate filters.
+    private struct Day {
+        var sleeping: LogEntry?
+        var nursing: LogEntry?
+        var lastFeed: LogEntry?
+        var summary = DaySummary()
+        var stage: GuideStage?
+        var feedPrediction: FeedPrediction?
+        var napPrediction: NapPrediction?
+        var goals: [Goal] = []
+        var sections: [(day: Date, entries: [LogEntry])] = []
+
+        init(entries: FetchedResults<LogEntry>, baby: Baby, now: Date) {
+            let all = Array(entries)
+            var feedTimes: [Date] = []
+            var lastWake: Date?
+            // The fetch is newest first, so the first match of each kind is the
+            // latest one and nothing needs sorting afterwards.
+            for entry in all {
+                switch entry.kind {
+                case .sleep:
+                    if entry.endedAt == nil {
+                        if sleeping == nil { sleeping = entry }
+                    } else if let ended = entry.endedAt, ended > lastWake ?? .distantPast {
+                        lastWake = ended
+                    }
+                case .bottle, .nursing:
+                    if entry.kind == .nursing, entry.endedAt == nil, nursing == nil { nursing = entry }
+                    if lastFeed == nil { lastFeed = entry }
+                    if let at = entry.startedAt { feedTimes.append(at) }
+                default:
+                    break
+                }
+            }
+            let ageDays = baby.ageDays(on: now)
+            summary = DaySummary(entries: all, day: now, now: now)
+            stage = ageDays.map(Guidance.stage(forAgeDays:))
+            feedPrediction = Predictor.nextFeed(feedTimes: feedTimes, stage: stage, now: now)
+            napPrediction = sleeping == nil ? Predictor.nextNap(lastWake: lastWake, ageDays: ageDays, now: now) : nil
+            goals = Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: ageDays, now: now)
+            sections = DayGrouping.days(all, missing: now)
+        }
     }
 
+    /// One publisher, made once: building it inline in `body` would resubscribe
+    /// on every render, and this view renders every minute. An iCloud catch-up
+    /// posts dozens of these in a row, so it settles for a second first and the
+    /// screen refreshes once instead of once per record.
+    private static let remoteChangePublisher = NotificationCenter.default
+        .publisher(for: .NSPersistentStoreRemoteChange)
+        .debounce(for: .seconds(1), scheduler: RunLoop.main)
+
     var body: some View {
+        // Everything below is derived from the one fetch, so it is derived
+        // once here rather than per subview: this runs every minute and on
+        // every change, and the old computed properties walked the entries
+        // half a dozen times each pass.
+        let day = Day(entries: entries, baby: baby, now: now)
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    statusCard
-                    statsRow
-                    goalsCard
-                    quickLog
-                    timeline
+                    statusCard(day)
+                    statsRow(day)
+                    goalsCard(day)
+                    quickLog(day)
+                    timeline(day)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -94,14 +137,16 @@ private struct TodayContent: View {
             }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
             .errorAlert($error)
-            .onAppear { scheduleFeedAlerts() }
-            .onChange(of: entries.count) { _, _ in scheduleFeedAlerts() }
-            .onChange(of: baby.onDutyDeviceID) { _, _ in scheduleFeedAlerts() }
-            .onChange(of: baby.shiftsJSON) { _, _ in scheduleFeedAlerts() }
-            // A partner's "I'm on" arrives through CloudKit; refresh the baby row when the store changes.
-            .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange).receive(on: RunLoop.main)) { _ in
+            .onAppear { scheduleFeedAlerts(day) }
+            .onChange(of: entries.count) { _, _ in scheduleFeedAlerts(day) }
+            .onChange(of: baby.onDutyDeviceID) { _, _ in scheduleFeedAlerts(day) }
+            .onChange(of: baby.shiftsJSON) { _, _ in scheduleFeedAlerts(day) }
+            // A partner's "I'm on" arrives through CloudKit; refresh the baby
+            // row when the store changes. A catch-up sync posts dozens of these
+            // in a row, so the refresh and the alarm work are coalesced.
+            .onReceive(Self.remoteChangePublisher) { _ in
                 context.refresh(baby, mergeChanges: true)
-                scheduleFeedAlerts()
+                scheduleFeedAlerts(day)
             }
         }
     }
@@ -120,9 +165,9 @@ private struct TodayContent: View {
         .padding(.top, 4)
     }
 
-    private var statusCard: some View {
+    private func statusCard(_ day: Day) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if dismissedPromptTick >= 0, let dismissed = FeedAlarm.pendingDismissal, lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
+            if dismissedPromptTick >= 0, let dismissed = FeedAlarm.pendingDismissal, day.lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
                 HStack(spacing: 12) {
                     Image(systemName: "alarm.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.warning).frame(width: 32)
                     VStack(alignment: .leading, spacing: 2) {
@@ -157,10 +202,10 @@ private struct TodayContent: View {
                 }
                 Spacer()
                 if baby.onDutyDeviceID == Prefs.deviceID {
-                    Button("Hand off") { do { try Shifts.handOff(baby, in: context); scheduleFeedAlerts() } catch { self.error = error.localizedDescription } }
+                    Button("Hand off") { do { try Shifts.handOff(baby, in: context); scheduleFeedAlerts(day) } catch { self.error = error.localizedDescription } }
                         .buttonStyle(.bordered).tint(MinaTheme.textSecondary).font(.mina(.subheadline, weight: .semibold))
                 } else {
-                    Button("I'm on") { do { try Shifts.takeOver(baby, in: context); scheduleFeedAlerts() } catch { self.error = error.localizedDescription } }
+                    Button("I'm on") { do { try Shifts.takeOver(baby, in: context); scheduleFeedAlerts(day) } catch { self.error = error.localizedDescription } }
                         .buttonStyle(.borderedProminent).tint(MinaTheme.diaper).font(.mina(.subheadline, weight: .semibold))
                 }
             }
@@ -171,7 +216,7 @@ private struct TodayContent: View {
                     .foregroundStyle(MinaTheme.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    if let lastFeed, let at = lastFeed.startedAt {
+                    if let lastFeed = day.lastFeed, let at = lastFeed.startedAt {
                         Text("Fed \(Format.ago(from: at, to: now))")
                             .font(.mina(.headline))
                         Text("\(lastFeed.title(unit: unit, now: now)) at \(Format.time(at)) · tap to edit")
@@ -188,8 +233,8 @@ private struct TodayContent: View {
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
-            .onTapGesture { if let lastFeed { editing = lastFeed } }
-            if let nursing, let since = nursing.startedAt {
+            .onTapGesture { if let lastFeed = day.lastFeed { editing = lastFeed } }
+            if let nursing = day.nursing, let since = nursing.startedAt {
                 Divider()
                 HStack(spacing: 12) {
                     Image(systemName: "heart.fill")
@@ -213,7 +258,7 @@ private struct TodayContent: View {
                         .font(.mina(.subheadline, weight: .semibold))
                 }
             }
-            if let prediction = feedPrediction, sleeping == nil || prediction.expectedAt > now {
+            if let prediction = day.feedPrediction, day.sleeping == nil || prediction.expectedAt > now {
                 Divider()
                 HStack(spacing: 12) {
                     Image(systemName: "sparkles")
@@ -230,7 +275,7 @@ private struct TodayContent: View {
                     Spacer(minLength: 0)
                 }
             }
-            if let nap = napPrediction {
+            if let nap = day.napPrediction {
                 Divider()
                 HStack(spacing: 12) {
                     Image(systemName: "moon.zzz")
@@ -247,7 +292,7 @@ private struct TodayContent: View {
                     Spacer(minLength: 0)
                 }
             }
-            if let sleeping, let since = sleeping.startedAt {
+            if let sleeping = day.sleeping, let since = sleeping.startedAt {
                 Divider()
                 HStack(spacing: 12) {
                     Image(systemName: "moon.zzz.fill")
@@ -272,17 +317,13 @@ private struct TodayContent: View {
         .minaCard()
     }
 
-    private var goals: [Goal] {
-        Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: baby.ageDays(on: now), now: now)
-    }
-
-    private var goalsCard: some View {
-        let goals = goals
+    private func goalsCard(_ day: Day) -> some View {
+        let goals = day.goals
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Today's goals").font(.mina(.headline))
                 Spacer()
-                Text("for \(stage?.title.lowercased() ?? "her age")").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+                Text("for \(day.stage?.title.lowercased() ?? "her age")").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
             }
             ForEach(goals) { goal in
                 HStack(spacing: 12) {
@@ -305,8 +346,9 @@ private struct TodayContent: View {
         .minaCard()
     }
 
-    private var statsRow: some View {
-        let summary = summary
+    private func statsRow(_ day: Day) -> some View {
+        let summary = day.summary
+        let stage = day.stage
         return HStack(spacing: 10) {
             NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
                 StatTile(title: "Feeds", value: "\(summary.feeds)", color: MinaTheme.bottle,
@@ -327,13 +369,13 @@ private struct TodayContent: View {
         .buttonStyle(.plain)
     }
 
-    private var quickLog: some View {
+    private func quickLog(_ day: Day) -> some View {
         VStack(spacing: 10) {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 QuickButton(title: "Bottle", subtitle: "Last \(unit.format(ml: Prefs.lastBottleML))", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle) {
                     sheet = .bottle
                 }
-                if let nursing, let since = nursing.startedAt {
+                if let nursing = day.nursing, let since = nursing.startedAt {
                     QuickButton(title: "Done nursing", subtitle: "\(Format.duration(now.timeIntervalSince(since))) so far", symbol: "heart.fill", color: MinaTheme.nursing) {
                         endNursing(nursing)
                     }
@@ -349,7 +391,7 @@ private struct TodayContent: View {
                 } label: {
                     QuickButtonLabel(title: "Diaper", subtitle: "Wet or dirty", symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper)
                 }
-                if let sleeping, let since = sleeping.startedAt {
+                if let sleeping = day.sleeping, let since = sleeping.startedAt {
                     QuickButton(title: "Woke up", subtitle: "Asleep \(Format.duration(now.timeIntervalSince(since)))", symbol: "sun.max.fill", color: MinaTheme.sleep) {
                         endSleep(sleeping)
                     }
@@ -358,7 +400,7 @@ private struct TodayContent: View {
                         log(EntryDraft(kind: .sleep, startedAt: now))
                     }
                 }
-                QuickButton(title: "Pump", subtitle: pumpSubtitle, symbol: EntryKind.pumping.symbol, color: MinaTheme.nursing) {
+                QuickButton(title: "Pump", subtitle: pumpSubtitle(day.summary), symbol: EntryKind.pumping.symbol, color: MinaTheme.nursing) {
                     sheet = .extra(.pumping)
                 }
                 QuickButton(title: "Note", subtitle: "Anything worth remembering", symbol: EntryKind.note.symbol, color: MinaTheme.note) {
@@ -377,8 +419,8 @@ private struct TodayContent: View {
         }
     }
 
-    private var timeline: some View {
-        let groups = DayGrouping.days(entries, missing: now)
+    private func timeline(_ day: Day) -> some View {
+        let groups = day.sections
         return VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
                 VStack(spacing: 6) {
@@ -392,13 +434,13 @@ private struct TodayContent: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             }
-            ForEach(groups, id: \.day) { day, dayEntries in
+            ForEach(groups, id: \.day) { date, dayEntries in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(Format.dayTitle(day, now: now))
+                        Text(Format.dayTitle(date, now: now))
                             .font(.mina(.headline))
                         Spacer()
-                        Text(dayLine(dayEntries, day: day))
+                        Text(dayLine(dayEntries, day: date))
                             .font(.mina(.caption))
                             .foregroundStyle(MinaTheme.textMuted)
                     }
@@ -411,7 +453,7 @@ private struct TodayContent: View {
 
     // MARK: Text
 
-    private var pumpSubtitle: String {
+    private func pumpSubtitle(_ summary: DaySummary) -> String {
         let pumped = summary.pumpedML
         return pumped > 0 ? "\(unit.format(ml: pumped)) today" : "Amount and side"
     }
@@ -447,16 +489,16 @@ private struct TodayContent: View {
 
     // MARK: Actions
 
-    private func scheduleFeedAlerts() {
+    private func scheduleFeedAlerts(_ day: Day) {
         let on = Shifts.thisPhoneIsOn(for: baby, at: now)
-        Reminders.scheduleFeed(on ? feedPrediction : nil, babyName: baby.displayName, now: now)
+        Reminders.scheduleFeed(on ? day.feedPrediction : nil, babyName: baby.displayName, now: now)
         if on {
-            FeedAlarm.reschedule(lastFeed: lastFeed?.startedAt, prediction: feedPrediction, babyName: baby.displayName, now: now)
+            FeedAlarm.reschedule(lastFeed: day.lastFeed?.startedAt, prediction: day.feedPrediction, babyName: baby.displayName, now: now)
         } else {
             FeedAlarm.cancel()
         }
         // A logged feed clears the "alarm dismissed, nothing logged" prompt.
-        if let dismissed = FeedAlarm.pendingDismissal, let last = lastFeed?.startedAt, last > dismissed { FeedAlarm.pendingDismissal = nil }
+        if let dismissed = FeedAlarm.pendingDismissal, let last = day.lastFeed?.startedAt, last > dismissed { FeedAlarm.pendingDismissal = nil }
     }
 
     private func log(_ draft: EntryDraft) {

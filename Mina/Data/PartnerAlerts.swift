@@ -18,6 +18,11 @@ final class PartnerAlerts {
     private let persistence = PersistenceController.shared
     private let queue = DispatchQueue(label: "mina.partner-alerts")
     private var observer: NSObjectProtocol?
+    /// An iCloud catch-up posts dozens of remote-change notifications in a row.
+    /// The merge itself has to happen every time, but the work that follows it
+    /// (re-arm the alarm, rebuild the digest, reload the widgets) runs once for
+    /// the burst instead of once per notification.
+    private let followUp = Throttle(interval: 2)
 
     func start() {
         guard observer == nil, !persistence.inMemory else { return }
@@ -33,37 +38,24 @@ final class PartnerAlerts {
 
     private static let subscriptionKey = "partner.cloudSubscription.v1"
 
-    /// On the owner's phone, a CloudKit subscription delivers a visible push
-    /// for entries created by other devices even when Mina is force-quit.
-    /// (Apple doesn't offer query subscriptions in the shared database, so the
-    /// partner's phone keeps the silent-push path.)
-    func registerCloudSubscriptionIfOwner(babyName: String, isOwner: Bool) {
-        guard isOwner, !Prefs.defaults.bool(forKey: Self.subscriptionKey) else { return }
+    /// Earlier builds saved a CloudKit query subscription on the owner's phone
+    /// so alerts arrived with the app force-quit. Apple sends one push per
+    /// record with no batching, so a catch-up sync became a hundred alerts.
+    /// This removes it once; alerts now come only through the batched local
+    /// path below.
+    func removeCloudSubscriptionIfPresent() {
+        guard Prefs.defaults.bool(forKey: Self.subscriptionKey) else { return }
         Task {
             let container = CKContainer(identifier: PersistenceController.cloudContainerIdentifier)
-            guard (try? await container.accountStatus()) == .available else { return }
-            let zone = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
-            let subscription = CKQuerySubscription(recordType: "CD_LogEntry",
-                                                   predicate: NSPredicate(format: "CD_deviceID != %@", Prefs.deviceID),
-                                                   subscriptionID: "partner-entries-v1", options: [.firesOnRecordCreation])
-            subscription.zoneID = zone
-            let info = CKSubscription.NotificationInfo()
-            info.title = "Mina"
-            info.alertBody = "Your partner just logged something for \(babyName)."
-            info.soundName = "default"
-            info.shouldSendContentAvailable = true
-            subscription.notificationInfo = info
-            do {
-                _ = try await container.privateCloudDatabase.save(subscription)
-                Prefs.defaults.set(true, forKey: Self.subscriptionKey)
-            } catch {
-                NSLog("partner subscription: \(error)")
-            }
+            _ = try? await container.privateCloudDatabase.deleteSubscription(withID: "partner-entries-v1")
+            Prefs.defaults.set(false, forKey: Self.subscriptionKey)
         }
     }
 
-    /// True once the server-side subscription exists, so the local copy stays quiet.
-    static var usesCloudSubscription: Bool { Prefs.defaults.bool(forKey: subscriptionKey) }
+    /// Kept so the local path can stay quiet if a future build brings the
+    /// server-side subscription back; nothing sets it today.
+
+    // MARK: Permission
 
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
@@ -86,8 +78,18 @@ final class PartnerAlerts {
         let context = persistence.newBackgroundContext()
         context.performAndWait {
             let request = NSPersistentHistoryChangeRequest.fetchHistory(after: lastToken)
-            guard let result = try? context.execute(request) as? NSPersistentHistoryResult,
-                  let transactions = result.result as? [NSPersistentHistoryTransaction], !transactions.isEmpty else { return }
+            let result: NSPersistentHistoryResult?
+            do {
+                result = try context.execute(request) as? NSPersistentHistoryResult
+            } catch {
+                // A token the store no longer recognises (history pruned, store
+                // rebuilt) would fail on every change from here on. Start again
+                // from now rather than re-reading the whole log.
+                NSLog("partner alerts: history unreadable, restarting from now: \(error)")
+                lastToken = persistence.container.persistentStoreCoordinator.currentPersistentHistoryToken(fromStores: nil)
+                return
+            }
+            guard let transactions = result?.result as? [NSPersistentHistoryTransaction], !transactions.isEmpty else { return }
             lastToken = transactions.last?.token
 
             let foreign = transactions.filter { $0.author != PersistenceController.appAuthor }
@@ -98,13 +100,16 @@ final class PartnerAlerts {
                 for transaction in foreign {
                     viewContext.mergeChanges(fromContextDidSave: transaction.objectIDNotification())
                 }
-                // A feed from the other phone moves the alarm, even if Today isn't on screen.
-                if let baby = Logbook.shared.currentBaby(in: viewContext) {
-                    Logbook.shared.rearmFeedAlarm(for: baby, in: viewContext)
-                    Logbook.anyEntryLogged?(baby, viewContext)
+            }
+            // A feed from the other phone moves the alarm, even if Today isn't
+            // on screen; the widgets and the digest follow the same entries.
+            followUp.call {
+                viewContext.perform {
+                    if let baby = Logbook.shared.currentBaby(in: viewContext) {
+                        Logbook.shared.didChangeEntries(for: baby, in: viewContext)
+                    }
                 }
             }
-            Logbook.widgetsChanged()
 
             var inserted: [NSManagedObjectID] = []
             for transaction in foreign {
@@ -112,26 +117,64 @@ final class PartnerAlerts {
                     if change.changedObjectID.entity.name == "LogEntry" { inserted.append(change.changedObjectID) }
                 }
             }
-            guard !inserted.isEmpty, Prefs.partnerAlerts, !Self.usesCloudSubscription else { return }
+            guard !inserted.isEmpty, Prefs.partnerAlerts else { return }
             if let baby = Logbook.shared.currentBaby(in: context), !Shifts.thisPhoneIsOn(for: baby) { return }
 
-            let cutoff = Date.now.addingTimeInterval(-6 * 3600)
-            var entries: [LogEntry] = []
-            for objectID in inserted {
-                guard let entry = try? context.existingObject(with: objectID) as? LogEntry, entry.isFromPartner else { continue }
-                let created: Date = entry.createdAt ?? entry.startedAt ?? .distantPast
-                if created > cutoff { entries.append(entry) }
+            // Only entries that happened recently, judged by when they were logged,
+            // not when they landed here: an iCloud catch-up re-inserts old entries.
+            let now = Date.now
+            let recent = inserted.compactMap { id -> LogEntry? in
+                guard let entry = try? context.existingObject(with: id) as? LogEntry, entry.isFromPartner,
+                      let at = entry.startedAt, now.timeIntervalSince(at) < Self.alertWindow, at <= now.addingTimeInterval(5 * 60) else { return nil }
+                return entry
             }
-            guard !entries.isEmpty else { return }
-            let messages = entries.map { Self.message(for: $0, unit: Prefs.unit) }
+            guard !recent.isEmpty else { return }
+            // Never more than one notification per sync, and never more than a few per hour.
+            let posts = Self.alertsPostedRecently(now: now)
+            guard posts < Self.maxAlertsPerHour else { return }
+            let message: Message
+            if recent.count == 1 {
+                message = Self.message(for: recent[0], unit: Prefs.unit, now: now)
+            } else {
+                message = Self.summary(for: recent, unit: Prefs.unit)
+            }
+            Self.recordAlertPosted(now: now)
             DispatchQueue.main.async {
-                // Genuinely on the main queue, so read UIApplication there.
                 MainActor.assumeIsolated {
                     guard UIApplication.shared.applicationState != .active else { return }
-                    for message in messages { Self.post(message) }
+                    Self.post(message)
                 }
             }
         }
+    }
+
+    // MARK: Rate limiting
+
+    /// Entries older than this never alert, however they arrived.
+    static let alertWindow: TimeInterval = 90 * 60
+    static let maxAlertsPerHour = 6
+    private static let postedKey = "partnerAlerts.posted"
+
+    static func alertsPostedRecently(now: Date) -> Int {
+        let stamps = (Prefs.defaults.array(forKey: postedKey) as? [Date]) ?? []
+        return stamps.filter { now.timeIntervalSince($0) < 3600 }.count
+    }
+
+    static func recordAlertPosted(now: Date) {
+        var stamps = (Prefs.defaults.array(forKey: postedKey) as? [Date]) ?? []
+        stamps = stamps.filter { now.timeIntervalSince($0) < 3600 } + [now]
+        Prefs.defaults.set(stamps, forKey: postedKey)
+    }
+
+    /// One line for a batch: "Kiley logged 3 things for Mina: 4 oz bottle, wet diaper, sleep."
+    static func summary(for entries: [LogEntry], unit: VolumeUnit) -> Message {
+        let who = entries.compactMap { $0.loggedBy }.first { !$0.isEmpty } ?? "Your partner"
+        let baby = entries.first?.baby?.displayName ?? "the baby"
+        let sorted = entries.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+        let items = sorted.prefix(3).map { $0.title(unit: unit).lowercased() }
+        var body = items.joined(separator: ", ")
+        if sorted.count > 3 { body += " and \(sorted.count - 3) more" }
+        return Message(title: "\(who) logged \(Format.count(sorted.count, "thing")) for \(baby)", body: clip(body), relevance: 0.8)
     }
 
     // MARK: Notifications

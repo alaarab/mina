@@ -11,7 +11,6 @@ import Foundation
 /// crosses midnight counts on both sides, and an ongoing sleep counts up to now.
 struct DaySummary {
     var feeds = 0
-    var bottles = 0
     var bottleML = 0.0
     var nursingCount = 0
     var nursingSeconds = 0.0
@@ -22,8 +21,6 @@ struct DaySummary {
     var sleepSeconds = 0.0
     var notes = 0
     var pumpedML = 0.0
-    var tummySeconds = 0.0
-    var others = 0
     var lastFeedAt: Date?
 
     init() {}
@@ -38,7 +35,6 @@ struct DaySummary {
             case .bottle:
                 guard inDay else { continue }
                 feeds += 1
-                bottles += 1
                 bottleML += entry.amountML
                 lastFeedAt = max(lastFeedAt ?? .distantPast, startedAt)
             case .nursing:
@@ -69,14 +65,10 @@ struct DaySummary {
             case .pumping:
                 guard inDay else { continue }
                 pumpedML += entry.amountML
-                others += 1
-            case .tummyTime:
-                guard inDay else { continue }
-                tummySeconds += entry.endedAt.map { max(0, $0.timeIntervalSince(startedAt)) } ?? 0
-                others += 1
-            case .growth, .medicine, .bath, .temperature, .milestone:
-                guard inDay else { continue }
-                others += 1
+            // The rest are logged and shown as rows, but nothing on any screen
+            // counts them, so a day's totals don't carry them.
+            case .tummyTime, .growth, .medicine, .bath, .temperature, .milestone:
+                continue
             }
         }
     }

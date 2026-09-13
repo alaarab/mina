@@ -27,6 +27,8 @@ enum BabyWeight: String, AppEnum {
     case lb15oz0, lb15oz1, lb15oz2, lb15oz3, lb15oz4, lb15oz5, lb15oz6, lb15oz7
     case lb15oz8, lb15oz9, lb15oz10, lb15oz11, lb15oz12, lb15oz13, lb15oz14, lb15oz15
 
+    // MARK: Spoken forms
+
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Weight")
 
     static var caseDisplayRepresentations: [BabyWeight: DisplayRepresentation] = [
@@ -207,6 +209,8 @@ enum BabyWeight: String, AppEnum {
         .lb15oz14: DisplayRepresentation(title: "15 pounds 14 ounces", synonyms: ["15 lb 14 oz", "15 pounds and 14 ounces", "15 14"]),
         .lb15oz15: DisplayRepresentation(title: "15 pounds 15 ounces", synonyms: ["15 lb 15 oz", "15 pounds and 15 ounces", "15 15"]),
     ]
+
+    // MARK: Value
 
     var grams: Double {
         let parts = rawValue.dropFirst(2).split(separator: "o")

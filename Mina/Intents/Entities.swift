@@ -195,20 +195,31 @@ struct RecentEntriesIntent: AppIntent {
 // MARK: Spotlight
 
 /// Spotlight and Siri semantic search over recent entries (iOS 18+).
+///
+/// A refresh reads 300 entries and rewrites the whole index, so it is both
+/// coalesced and serialised: a burst of saves rebuilds once a few seconds
+/// later, and two rebuilds never interleave (one's delete landing after the
+/// other's write would leave Spotlight empty).
 enum EntryIndex {
+    private static let rebuilds = SerialTasks()
+    private static let coalesce = Throttle(interval: 5)
+
     static func refresh() {
         guard #available(iOS 18.0, *) else { return }
-        Task.detached(priority: .utility) {
-            let unit = Prefs.unit
-            guard let entities = try? await Logbook.shared.perform({ context, baby in
-                let request = LogEntry.request()
-                request.predicate = NSPredicate(format: "baby == %@", baby)
-                request.fetchLimit = 300
-                return try context.fetch(request).map { LogEntryEntity(entry: $0, unit: unit) }
-            }) else { return }
-            try? await CSSearchableIndex.default().deleteAllSearchableItems()
-            try? await CSSearchableIndex.default().indexAppEntities(entities)
-        }
+        coalesce.call { rebuilds.enqueue { await rebuild() } }
+    }
+
+    @available(iOS 18.0, *)
+    private static func rebuild() async {
+        let unit = Prefs.unit
+        guard let entities = try? await Logbook.shared.perform({ context, baby in
+            let request = LogEntry.request()
+            request.predicate = NSPredicate(format: "baby == %@", baby)
+            request.fetchLimit = 300
+            return try context.fetch(request).map { LogEntryEntity(entry: $0, unit: unit) }
+        }) else { return }
+        try? await CSSearchableIndex.default().deleteAllSearchableItems()
+        try? await CSSearchableIndex.default().indexAppEntities(entities)
     }
 }
 

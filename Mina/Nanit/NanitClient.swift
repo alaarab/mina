@@ -2,8 +2,13 @@ import Foundation
 import Security
 
 /// Nanit has no public API. This talks to the same endpoints the Nanit app
-/// uses, as documented by the Home Assistant community bridge. It can break
+/// uses, as documented by the Home Assistant community bridge: the values that
+/// come back, the scrubbing that keeps a token out of an error message, the
+/// calls themselves, and the Keychain the sign-in token lives in. It can break
 /// whenever Nanit changes their backend, so every call fails soft.
+
+// MARK: Values
+
 struct NanitTokens: Codable {
     var accessToken: String
     var refreshToken: String
@@ -90,6 +95,8 @@ extension NanitMessage: Decodable {
     }
 }
 
+// MARK: Redaction
+
 /// Strips anything that could be a credential out of text that is about to be
 /// shown in the UI. Nanit's error bodies are undocumented, so this errs towards
 /// deleting too much: any value of a key that looks secret, and any bare run of
@@ -142,6 +149,8 @@ enum NanitRedaction {
         json.keys.sorted().joined(separator: ", ")
     }
 }
+
+// MARK: Calls
 
 enum NanitError: LocalizedError {
     case badCredentials
@@ -294,6 +303,8 @@ final class NanitClient {
 /// refresh can use them while the phone is locked, and never synchronised to
 /// iCloud Keychain: the token is this phone's session with Nanit, and a copy of
 /// it on the partner's phone would be a second silent sign-in.
+// MARK: Keychain
+
 enum Keychain {
     private static let service = "com.alaarab.mina.nanit"
 
