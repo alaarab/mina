@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mina · a newborn log for two phones</title>
+<meta name="description" content="Mina is a free, open-source iPhone app for new parents. Log feeds, diapers and sleep by tapping or by telling Siri, share one log between two phones over iCloud, and see what to expect at every age.">
+<meta property="og:title" content="Mina · a newborn log for two phones">
+<meta property="og:description" content="Say “Hey Siri, Mina ate 4 ounces.” Both phones see it. No accounts, no servers, no ads.">
+<meta property="og:image" content="https://alaarab.github.io/mina/assets/icon.png">
+<link rel="icon" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>
+  :root {
+    --cream: #FFF7F1; --card: #FFFFFF; --tint: #FDEDE3; --ink: #2B2321; --ink-2: #6E625D; --ink-3: #9C908A; --line: #F1E3D9;
+    --coral: #E4826F; --apricot: #F0A04B; --rose: #E57C9B; --sage: #6FB56A; --periwinkle: #7C8FE0; --lilac: #9A8FB8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --cream: #171413; --card: #231F1D; --tint: #2E2724; --ink: #F4ECE6; --ink-2: #B8ACA5; --ink-3: #8A7F79; --line: #3A332F; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font: 17px/1.55 ui-rounded, -apple-system, "SF Pro Rounded", "Nunito", system-ui, sans-serif; }
+  a { color: var(--coral); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  header.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--ink); }
+  .brand img { width: 36px; height: 36px; border-radius: 9px; }
+  nav a { margin-left: 18px; color: var(--ink-2); font-weight: 600; font-size: 15px; }
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 32px; align-items: center; padding: 40px 0 24px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.02; margin: 0 0 14px; letter-spacing: -0.02em; }
+  .hero h1 em { font-style: normal; color: var(--coral); }
+  .hero p.lead { font-size: 20px; color: var(--ink-2); margin: 0 0 22px; max-width: 34ch; }
+  .siri { display: inline-flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 12px 18px 12px 12px; font-weight: 600; box-shadow: 0 8px 30px rgba(228,130,111,.12); }
+  .siri .orb { width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(from 90deg, var(--coral), var(--rose), var(--periwinkle), var(--sage), var(--apricot), var(--coral)); animation: spin 6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cta { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 999px; font-weight: 700; background: var(--coral); color: #fff; }
+  .btn.ghost { background: var(--tint); color: var(--ink); }
+  .btn:hover { text-decoration: none; filter: brightness(1.05); }
+  .phone { justify-self: center; width: min(320px, 80vw); border-radius: 44px; padding: 10px; background: #1a1614; box-shadow: 0 30px 60px rgba(43,35,33,.25); }
+  .phone img { display: block; width: 100%; border-radius: 34px; }
+  section { padding: 44px 0; }
+  h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; margin: 0 0 8px; line-height: 1.1; }
+  .sub { color: var(--ink-2); font-size: 18px; margin: 0 0 26px; max-width: 60ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; font-weight: 600; font-size: 15px; }
+  .chip::before { content: "“"; color: var(--coral); } .chip::after { content: "”"; color: var(--coral); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; }
+  .card .dot { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+  .shots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; border-radius: 26px; border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(43,35,33,.12); }
+  .shots figcaption { font-size: 14px; color: var(--ink-2); margin-top: 10px; text-align: center; }
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .steps div { background: var(--tint); border-radius: 18px; padding: 20px; }
+  .steps div::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--coral); color: #fff; font-weight: 800; margin-bottom: 10px; }
+  .steps p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+  .privacy { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .privacy ul { margin: 0; padding-left: 18px; color: var(--ink-2); }
+  footer { padding: 30px 0 50px; color: var(--ink-3); font-size: 14px; border-top: 1px solid var(--line); margin-top: 20px; }
+  code { background: var(--tint); padding: 2px 7px; border-radius: 7px; font-size: 0.92em; }
+  @media (max-width: 800px) {
+    .hero { grid-template-columns: 1fr; text-align: left; }
+    .phone { order: 2; }
+    .shots { grid-template-columns: repeat(2, 1fr); }
+    .privacy { grid-template-columns: 1fr; }
+    nav a { margin-left: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#"><img src="assets/apple-touch-icon.png" alt="">Mina</a>
+    <nav><a href="#siri">Siri</a><a href="#features">Features</a><a href="#share">Two phones</a><a href="privacy.html">Privacy</a><a href="https://github.com/alaarab/mina">GitHub</a></nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1>The newborn log you can <em>talk to</em>.</h1>
+      <p class="lead">Feeds, diapers and sleep, logged with a tap or a sentence, on both parents' phones at once. Free, open source, no accounts, no ads.</p>
+      <div class="siri"><span class="orb"></span><span>Hey Siri, Mina just ate four ounces</span></div>
+      <div class="cta">
+        <a class="btn" href="https://github.com/alaarab/mina#build">Build it from source</a>
+        <a class="btn ghost" href="privacy.html">How your data is handled</a>
+      </div>
+    </div>
+    <div class="phone"><img src="assets/today.png" alt="The Today screen: last feed, next-feed prediction, today's totals and one-tap buttons"></div>
+  </section>
+
+  <section id="siri">
+    <h2>Say it. It's logged.</h2>
+    <p class="sub">The app's name is the trigger word, so the phrases sound like something you'd actually say at 3 AM. Siri answers back so you know it landed. Nothing to set up.</p>
+    <div class="chips">
+      <span class="chip">Mina ate 4 ounces</span>
+      <span class="chip">Mina nursed on the left</span>
+      <span class="chip">Mina just peed</span>
+      <span class="chip">Mina pooped</span>
+      <span class="chip">Mina is asleep</span>
+      <span class="chip">Mina woke up</span>
+      <span class="chip">Mina weighs 7 pounds 4 ounces</span>
+      <span class="chip">When did Mina last eat?</span>
+      <span class="chip">How many diapers has Mina had today?</span>
+    </div>
+  </section>
+
+  <section id="features">
+    <h2>Everything a first month throws at you</h2>
+    <p class="sub">Bottle, nursing, diapers, sleep, notes, pumping, growth, medicine, tummy time, bath and temperature. Each one a tap, a widget button, or a sentence.</p>
+    <div class="grid">
+      <div class="card"><div class="dot" style="background:#FDEDE3">✨</div><h3>Knows what's next</h3><p>Learns her feeding rhythm and shows the next feed before she asks for it, plus the nap window for her age. Optional reminders.</p></div>
+      <div class="card"><div class="dot" style="background:#E7ECFB">📱</div><h3>Widgets that do things</h3><p>Home Screen buttons for the last bottle amount, pee, poop and sleep. Lock-screen glances for time since the last feed.</p></div>
+      <div class="card"><div class="dot" style="background:#E9F4E6">🗓️</div><h3>Calendar and trends</h3><p>A month at a glance, then 14 days of charts: ounces, sleep, longest night stretch, diapers. One tap makes a PDF for the pediatrician.</p></div>
+      <div class="card"><div class="dot" style="background:#FBE9EF">📖</div><h3>What to expect, by age</h3><p>Feeding, diapers, sleep, growth, milestones, checkups and when to call the doctor, from day one to month four. Tap a milestone when she does it.</p></div>
+      <div class="card"><div class="dot" style="background:#FFF1DD">🔔</div><h3>Both parents in the loop</h3><p>“Mom fed Mina: 4 oz bottle at 2:15 PM” lands on the other phone, so nobody has to ask.</p></div>
+      <div class="card"><div class="dot" style="background:#EEEBF5">📷</div><h3>Nanit, optional</h3><p>Connect a Nanit camera and its sleep and wake events become sleep entries on their own.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shots">
+      <figure><img src="assets/today.png" alt="Today screen"><figcaption>Today: what happened, what's next, one-tap logging</figcaption></figure>
+      <figure><img src="assets/calendar.png" alt="Calendar screen"><figcaption>Calendar: a month of dots, tap a day for details</figcaption></figure>
+      <figure><img src="assets/trends.png" alt="Trends screen"><figcaption>Trends: 14-day charts and a shareable report</figcaption></figure>
+      <figure><img src="assets/guide.png" alt="Guide screen"><figcaption>Guide: ranges and milestones for her exact age</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="share">
+    <h2>One log, two phones, zero servers</h2>
+    <p class="sub">Mina uses iCloud sharing, the same thing Notes and Reminders use. Your log lives in your own iCloud, and you invite your partner once.</p>
+    <div class="steps">
+      <div><p>One of you opens the app, types the baby's name and birthday, and taps Start.</p></div>
+      <div><p>Settings → Share with your partner → send the invite by Messages.</p></div>
+      <div><p>Your partner opens the link. Mina opens with the same log, and every entry syncs both ways within seconds.</p></div>
+    </div>
+  </section>
+
+  <section id="privacy-summary">
+    <h2>Private by construction</h2>
+    <p class="sub">There is no Mina server. Nothing about your baby leaves Apple's iCloud, and only the people you invite can see it.</p>
+    <div class="privacy">
+      <ul>
+        <li>No account, sign-up, email or phone number.</li>
+        <li>No analytics, tracking or crash reporting.</li>
+        <li>No ads, no third-party SDKs, no network calls except iCloud (and Nanit, only if you connect it).</li>
+      </ul>
+      <ul>
+        <li>Data is stored on your phone and in your iCloud private database, encrypted in transit and at rest by Apple.</li>
+        <li>Notifications are generated on your phone.</li>
+        <li>Delete the app and revoke the share, and it's gone. <a href="privacy.html">Full privacy policy →</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open source</h2>
+    <p class="sub">SwiftUI, Core Data with CloudKit, App Intents, WidgetKit. MIT licensed. Build it with Xcode and XcodeGen, or read how it's put together.</p>
+    <p><a class="btn" href="https://github.com/alaarab/mina">github.com/alaarab/mina</a></p>
+  </section>
+
+  <footer>Mina is general guidance and a log, not medical advice. Your pediatrician knows your baby; this app doesn't. · <a href="privacy.html">Privacy</a> · <a href="https://github.com/alaarab/mina">Source</a></footer>
+</div>
+</body>
+</html>
