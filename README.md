@@ -94,6 +94,20 @@ Partner alerts on the log owner's phone use a CloudKit subscription, so they
 arrive even when Mina has been force-quit. The partner's phone gets them
 through the silent push while the app is in the background.
 
+## Today's goals and the Sunday digest
+
+Today shows goals for her age: feeds, wet and dirty diapers, sleep, and the gap
+since the last feed (the wake-to-feed limit in the first two weeks). The rings
+know what time of day it is, so three wet diapers at noon is on track and three
+at 10 PM is short, and the day's one worry, if any, is spelled out the way the
+guide does. Targets follow the guide's ranges unless you set your own under
+Settings → Goals (a pediatrician's plan). The lock-screen widget shows the same
+numbers, and "how is my baby doing today" includes them.
+
+Sunday at 7 PM, one notification: the week's feeds, bottle ounces a day, wet
+and dirty diapers, sleep a day, longest stretch, and how it moved since last
+week. Built on the phone from the log. Toggle in Settings → Notifications.
+
 ## Looking back
 
 - **Calendar**: a month of colored dots; tap a day for its totals and entries.

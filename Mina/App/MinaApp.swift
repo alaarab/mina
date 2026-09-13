@@ -20,6 +20,7 @@ struct MinaApp: App {
         DebugLaunch.seedIfRequested(logbook: .shared, context: persistence.container.viewContext)
         PartnerAlerts.shared.start()
         EntryIndex.refresh()
+        Logbook.anyEntryLogged = { baby, context in WeeklyDigest.schedule(for: baby, in: context) }
         Logbook.feedLogged = { baby, context in
             let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
             let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
@@ -114,6 +115,7 @@ struct RootView: View {
         Group {
             if let baby = persistence.preferredBaby(from: Array(babies)) {
                 MainTabs(baby: baby).id(baby.objectID)
+                    .task { WeeklyDigest.schedule(for: baby, in: context) }
                     .task {
                         if ShareManager.shared.existingShare(for: baby) != nil {
                             PartnerAlerts.shared.registerCloudSubscriptionIfOwner(babyName: baby.displayName, isOwner: !persistence.isShared(baby))

@@ -17,6 +17,7 @@ struct MinaSnapshot {
     var lastBottleML = Prefs.lastBottleML
     var unit = Prefs.unit
     var hasBaby = false
+    var goalLine = ""          // "5/8 feeds · 4/6 wet · 9h/15h"
 
     static func load(now: Date = .now) -> MinaSnapshot {
         var snapshot = MinaSnapshot()
@@ -40,6 +41,10 @@ struct MinaSnapshot {
             snapshot.dirty = summary.dirty
             snapshot.sleepSeconds = summary.sleepSeconds
             snapshot.sleepingSince = Logbook.shared.ongoingSleep(for: baby, in: context)?.startedAt
+            let goals = Goals.evaluate(summary: summary, lastFeed: snapshot.lastFeedAt, stage: baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(on: now), now: now)
+            snapshot.goalLine = goals.filter { $0.kind != .feedGap && $0.kind != .dirty }.map { g in
+                g.kind == .sleep ? "\(Format.duration(g.value * 3600))/\(VolumeUnit.trim(g.target))h" : "\(Int(g.value))/\(Int(g.target)) \(g.unit)"
+            }.joined(separator: " · ")
         }
         return snapshot
     }
@@ -134,7 +139,7 @@ struct StatusWidgetView: View {
                 } else {
                     Text("No feeds yet").font(.headline)
                 }
-                Text("\(snap.feeds) feeds · \(snap.wet + snap.dirty) diapers · \(Format.duration(snap.sleepSeconds)) sleep")
+                Text(snap.goalLine.isEmpty ? "\(snap.feeds) feeds · \(snap.wet + snap.dirty) diapers · \(Format.duration(snap.sleepSeconds)) sleep" : snap.goalLine)
                     .font(.caption2)
             }
         default:

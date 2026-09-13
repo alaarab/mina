@@ -2,6 +2,13 @@
 
 Newest first. Versions are 0.0.<build>. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
+## 0.0.18
+
+### New
+- Today's goals: feeds, wet and dirty diapers, sleep and the gap since the last feed, with targets for her age and rings that know what time of day it is. Set your own targets in Settings if the pediatrician gave you numbers.
+- Sunday evening digest: one notification with the week's feeds, diapers and sleep, and how it compares to last week.
+- Siri's "how is my baby doing today" now includes the goals.
+
 ## 0.0.17
 
 ### New
