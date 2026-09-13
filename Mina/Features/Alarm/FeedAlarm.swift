@@ -13,6 +13,7 @@ enum FeedAlarm {
     static let gapKey = "feedAlarmGapMinutes"    // 0 = use her predicted next feed
     static let idKey = "feedAlarmID"
     static let dismissedAtKey = "feedAlarmDismissedAt"
+    static let armedForKey = "feedAlarmArmedForFeed"      // the last-feed time the current alarm was built from
 
     /// Set when the alarm was dismissed and no feed has been logged since.
     static var pendingDismissal: Date? {
@@ -41,15 +42,23 @@ enum FeedAlarm {
         return lastFeed.addingTimeInterval(Double(gapMinutes) * 60)
     }
 
-    /// Cancels the previous alarm and schedules the next, if there is one in the future.
-    static func reschedule(lastFeed: Date?, prediction: FeedPrediction?, babyName: String, now: Date = .now) {
+    /// Schedules the next alarm once per feed. A screen refresh never re-arms
+    /// an alarm that already fired; only a newer feed (or a settings change) does.
+    static func reschedule(lastFeed: Date?, prediction: FeedPrediction?, babyName: String, now: Date = .now, force: Bool = false) {
         #if canImport(AlarmKit)
         guard #available(iOS 26.0, *) else { return }
         Task {
             let manager = AlarmManager.shared
+            let armedFor = Prefs.defaults.object(forKey: armedForKey) as? Date
+            let hasAlarm = Prefs.defaults.string(forKey: idKey) != nil
+            // Same feed as last time and an alarm already exists (or was dismissed): leave it alone.
+            if !force, hasAlarm || pendingDismissal != nil, armedFor == lastFeed { return }
+            // A newer feed than the one the alarm was built for: that alarm is stale, drop it.
             if let old = Prefs.defaults.string(forKey: idKey).flatMap(UUID.init(uuidString:)) { try? manager.cancel(id: old) }
+            Prefs.defaults.removeObject(forKey: idKey)
+            if let lastFeed, let dismissed = pendingDismissal, lastFeed > dismissed { pendingDismissal = nil }
             guard isOn, let date = fireDate(lastFeed: lastFeed, prediction: prediction, now: now), date > now.addingTimeInterval(60) else {
-                Prefs.defaults.removeObject(forKey: idKey); return
+                Prefs.defaults.set(lastFeed, forKey: armedForKey); return
             }
             do {
                 let status = try await manager.requestAuthorization()
@@ -71,6 +80,7 @@ enum FeedAlarm {
                 let id = UUID()
                 _ = try await manager.schedule(id: id, configuration: configuration)
                 Prefs.defaults.set(id.uuidString, forKey: idKey)
+                Prefs.defaults.set(lastFeed, forKey: armedForKey)
             } catch {
                 NSLog("feed alarm: \(error)")
             }
@@ -82,7 +92,10 @@ enum FeedAlarm {
         #if canImport(AlarmKit)
         guard #available(iOS 26.0, *) else { return }
         if let old = Prefs.defaults.string(forKey: idKey).flatMap(UUID.init(uuidString:)) { try? AlarmManager.shared.cancel(id: old) }
+        // Belt and braces: cancel anything of ours the system still holds.
+        if let all = try? AlarmManager.shared.alarms { for alarm in all { try? AlarmManager.shared.cancel(id: alarm.id) } }
         Prefs.defaults.removeObject(forKey: idKey)
+        Prefs.defaults.removeObject(forKey: armedForKey)
         #endif
     }
 }
@@ -95,6 +108,12 @@ struct DismissFeedAlarmIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         Prefs.defaults.set(Date.now, forKey: FeedAlarm.dismissedAtKey)
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *), let id = Prefs.defaults.string(forKey: FeedAlarm.idKey).flatMap(UUID.init(uuidString:)) {
+            try? AlarmManager.shared.cancel(id: id)
+        }
+        #endif
+        Prefs.defaults.removeObject(forKey: FeedAlarm.idKey)
         return .result()
     }
 }

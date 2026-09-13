@@ -35,6 +35,7 @@ private struct TodayContent: View {
     @State private var editing: LogEntry?
     @State private var error: String?
     @State private var asking = DebugLaunch.argument("-open") == "ask"
+    @State private var dismissedPromptTick = 0
 
     init(baby: Baby, now: Date) {
         _baby = ObservedObject(wrappedValue: baby)
@@ -120,7 +121,7 @@ private struct TodayContent: View {
 
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let dismissed = FeedAlarm.pendingDismissal, lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
+            if dismissedPromptTick >= 0, let dismissed = FeedAlarm.pendingDismissal, lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
                 HStack(spacing: 12) {
                     Image(systemName: "alarm.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.warning).frame(width: 32)
                     VStack(alignment: .leading, spacing: 2) {
@@ -129,8 +130,13 @@ private struct TodayContent: View {
                     }
                     Spacer()
                     Button("Log it") { sheet = .bottle }.buttonStyle(.borderedProminent).tint(MinaTheme.bottle).font(.mina(.subheadline, weight: .semibold))
-                    Button { FeedAlarm.pendingDismissal = nil } label: { Image(systemName: "xmark").frame(width: 30, height: 30) }
-                        .buttonStyle(.bordered).tint(MinaTheme.textMuted).accessibilityLabel("Dismiss")
+                    Button {
+                        FeedAlarm.pendingDismissal = nil
+                        dismissedPromptTick &+= 1
+                    } label: {
+                        Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(MinaTheme.textMuted).accessibilityLabel("Dismiss")
                 }
                 Divider()
             }

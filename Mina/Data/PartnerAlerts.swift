@@ -98,6 +98,8 @@ final class PartnerAlerts {
                 for transaction in foreign {
                     viewContext.mergeChanges(fromContextDidSave: transaction.objectIDNotification())
                 }
+                // A feed from the other phone moves the alarm, even if Today isn't on screen.
+                if let baby = Logbook.shared.currentBaby(in: viewContext) { Logbook.shared.rearmFeedAlarm(for: baby, in: viewContext) }
             }
             Logbook.widgetsChanged()
 

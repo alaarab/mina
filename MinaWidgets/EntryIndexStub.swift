@@ -4,3 +4,4 @@ import Foundation
 enum EntryIndex {
     static func refresh() {}
 }
+

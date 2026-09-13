@@ -130,7 +130,7 @@ struct SettingsView: View {
                                 if on {
                                     let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
                                     let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
-                                    FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
+                                    FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
                                 } else { FeedAlarm.cancel() }
                             }
                         if feedAlarm {
@@ -140,7 +140,7 @@ struct SettingsView: View {
                             .onChange(of: feedAlarmGap) { _, _ in
                                 let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
                                 let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
-                                FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
+                                FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
                             }
                         }
                     }
