@@ -1,8 +1,13 @@
 # Mina
 
-A newborn log for two phones. Feeds, diapers, sleep and notes, logged by tap or
-by telling Siri, shared through iCloud so both parents see the same thing, with
-a calendar to look back and an age-based guide for what to expect.
+A newborn log for two phones. Feeds, diapers, sleep and more, logged by tap, by
+widget, or by telling Siri; shared through iCloud so every caregiver sees the
+same log; a feed alarm and a "who's on" handoff for the nights; a calendar and
+searchable history to look back; an age-based guide for what to expect; and an
+on-device Ask that answers questions about her log without anything leaving the
+phone. Free, open source, no accounts, no servers.
+
+Website and privacy policy: https://alaarab.github.io/mina/ · App Store listing copy: [docs/store/listing.md](docs/store/listing.md)
 
 ## Build
 
@@ -45,10 +50,12 @@ the schema deployed to Production in the CloudKit Console first.
 - **Quick log** (medium Home Screen widget): last feed, today's counts, and one-tap
   buttons for the last bottle amount, pee, poop, and sleep/awake.
 - **Last feed** (small, plus lock-screen circular/rectangular/inline): time since
-  the last feed or how long she's been asleep.
-- **Partner alerts**: when the other phone's entry syncs in, this phone shows
-  "Mom fed Mina: 4 oz bottle at 2:15 PM". They arrive while the app is in the
-  background; a force-quit app catches up on next launch. Toggle in Settings.
+  the last feed or how long she's been asleep. Redacted until the phone is unlocked.
+- **Partner alerts**: "Mom fed Mina: 4 oz bottle at 2:15 PM" on the other phone.
+  On the log owner's phone these come through a CloudKit push and arrive even
+  when Mina has been force-quit; on a partner's phone they arrive while the app
+  is in the background. Only the phone that's on (see Who's on) gets them.
+  Toggle in Settings.
 
 Widgets read and write the store through the App Group; the app exports widget
 entries to iCloud the next time it runs, so a widget-logged feed reaches the
@@ -109,15 +116,19 @@ so it works hands-free.
 
 ## More than one baby
 
-Settings → Baby → Add another baby. Each baby has its own log and its own
-sharing; a picker appears when there's more than one. If you accept a share
-after starting a log with the same name on your own phone, Mina offers to
-merge your entries into the shared log.
+Settings → Baby → **Add another baby** (a second child, or twins). Each baby
+has its own log and its own sharing; a picker appears when there's more than
+one and everything on screen belongs to the selected baby. If you accept a
+share after starting a log with the same name on your own phone, Mina offers to
+merge your entries into the shared log so nothing is typed twice.
 
 ## Backup
 
-Settings → Backup exports every entry as a JSON file (share it anywhere) and
-imports one back, adding only entries that aren't already there.
+Settings → Backup exports every entry as a JSON file (AirDrop it, keep it in
+Files) and imports one back, adding only entries that aren't already there, so
+importing twice or importing a partner's file never duplicates. Do this before
+switching between a development build and a TestFlight build: they use
+different iCloud environments and don't see each other's data.
 
 ## Predictions, trends, milestones
 

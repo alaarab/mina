@@ -99,3 +99,13 @@ the session is written outside the Keychain. Requests time out at 20 seconds.
 Mina is open source at <https://github.com/alaarab/mina>. Open an issue. There
 is no server to take down and no user data for a maintainer to leak, so please
 report through the repository rather than privately.
+
+## Who's on, alarms and pushes
+
+"Who's on" is stored on the shared baby record (a device id, a display name and a
+timestamp) so every participant sees it; the device id is a random UUID with no
+link to the person or the hardware. The feed alarm is scheduled locally through
+AlarmKit and never writes to the log: its Stop button only records a dismissal
+time on the phone. On the log owner's phone, partner alerts come from a CloudKit
+query subscription whose notification text is a fixed sentence with the baby's
+name; the entry itself is not in the push payload.

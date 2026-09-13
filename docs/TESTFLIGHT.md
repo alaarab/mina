@@ -32,6 +32,14 @@ uploads it. Each run auto-increments the build number. It needs one file:
    builds instantly. **External** testers join by a public link, but the first build
    goes through Beta App Review (usually under a day).
 
+## Version numbers
+
+`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml` feed both the
+app and the widget Info.plists. `release.py` sets the build number from its
+counter on every upload; bump the marketing version in `project.yml` (or pass
+`--marketing-version`) when the App Store version changes. App Store Connect
+rejects a build number it has already seen.
+
 ## Each release
 
 ```sh
