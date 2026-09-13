@@ -68,8 +68,8 @@ side, switch sides, stop; or enter minutes after the fact), pumping (amount +
 side), diaper (wet/dirty/both), sleep (running timer), notes, and under the
 more menu: growth (weight, length, head), medicine (name + dose, defaults to
 vitamin D), tummy time, bath, temperature (with a fever warning under
-3 months). Growth and temperature follow the bottle unit: ounces means lb/oz,
-inches and °F; milliliters means kg, cm and °C.
+3 months). Weight, length and temperature have their own unit setting (pounds and ounces,
+inches and °F by default; or kg, cm and °C), separate from bottle amounts.
 
 Every entry can be opened from any list to fix the amount, the time (with
 ±5/15/30 minute nudges), the side, or delete it.

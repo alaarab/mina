@@ -22,12 +22,14 @@ struct ExtraSheet: View {
     @State private var medicine = "Vitamin D"
     @State private var dose = "400 IU"
 
+    private let bodyUnit = Prefs.bodyUnit
+
     init(kind: EntryKind, unit: VolumeUnit, onSave: @escaping (EntryDraft) -> Void) {
         self.kind = kind
         self.unit = unit
         self.onSave = onSave
         _amount = State(initialValue: unit == .ounces ? 3 : 90)
-        _temperature = State(initialValue: unit == .ounces ? 98.6 : 37.0)
+        _temperature = State(initialValue: Prefs.bodyUnit.isImperial ? 98.6 : 37.0)
     }
 
     var body: some View {
@@ -44,7 +46,7 @@ struct ExtraSheet: View {
                     }
                 case .growth:
                     Section("Weight") {
-                        if unit == .ounces {
+                        if bodyUnit.isImperial {
                             Stepper("\(pounds) lb", value: $pounds, in: 0...40)
                             Stepper("\(VolumeUnit.trim(ounces)) oz", value: $ounces, in: 0...15.5, step: 0.5)
                         } else {
@@ -52,8 +54,8 @@ struct ExtraSheet: View {
                         }
                     }
                     Section("Length and head") {
-                        Stepper("Length \(VolumeUnit.trim(length)) \(lengthUnit)", value: $length, in: 0...(unit == .ounces ? 40 : 100), step: unit == .ounces ? 0.25 : 0.5)
-                        Stepper("Head \(VolumeUnit.trim(head)) \(lengthUnit)", value: $head, in: 0...(unit == .ounces ? 25 : 60), step: unit == .ounces ? 0.25 : 0.5)
+                        Stepper("Length \(VolumeUnit.trim(length)) \(lengthUnit)", value: $length, in: 0...(bodyUnit.isImperial ? 40 : 100), step: bodyUnit.isImperial ? 0.25 : 0.5)
+                        Stepper("Head \(VolumeUnit.trim(head)) \(lengthUnit)", value: $head, in: 0...(bodyUnit.isImperial ? 25 : 60), step: bodyUnit.isImperial ? 0.25 : 0.5)
                     }
                 case .medicine:
                     Section("Medicine") {
@@ -66,8 +68,8 @@ struct ExtraSheet: View {
                     }
                 case .temperature:
                     Section("Temperature") {
-                        Stepper(value: $temperature, in: unit == .ounces ? 90...110 : 32...43, step: 0.1) {
-                            Text(String(format: "%.1f %@", temperature, unit == .ounces ? "°F" : "°C")).font(.mina(.title3, weight: .semibold))
+                        Stepper(value: $temperature, in: bodyUnit.isImperial ? 90...110 : 32...43, step: 0.1) {
+                            Text(String(format: "%.1f %@", temperature, bodyUnit.isImperial ? "°F" : "°C")).font(.mina(.title3, weight: .semibold))
                         }
                         if isFever {
                             Label("100.4 °F / 38 °C or higher under 3 months old is a call to the doctor, day or night.", systemImage: "phone.fill")
@@ -91,8 +93,8 @@ struct ExtraSheet: View {
         }
     }
 
-    private var lengthUnit: String { unit == .ounces ? "in" : "cm" }
-    private var isFever: Bool { Measure.celsius(fromDisplay: temperature, unit: unit) >= 38 }
+    private var lengthUnit: String { bodyUnit.isImperial ? "in" : "cm" }
+    private var isFever: Bool { Measure.celsius(fromDisplay: temperature, unit: bodyUnit) >= 38 }
 
     private func save() {
         var draft = EntryDraft(kind: kind, startedAt: when)
@@ -102,15 +104,15 @@ struct ExtraSheet: View {
             draft.amountML = unit.milliliters(fromDisplay: amount)
             draft.side = side
         case .growth:
-            draft.weightGrams = unit == .ounces ? (Double(pounds) * 16 + ounces) * Measure.gramsPerOunce : kilograms * 1000
-            draft.lengthCM = Measure.cm(fromDisplay: length, unit: unit)
-            draft.headCM = Measure.cm(fromDisplay: head, unit: unit)
+            draft.weightGrams = bodyUnit.isImperial ? (Double(pounds) * 16 + ounces) * Measure.gramsPerOunce : kilograms * 1000
+            draft.lengthCM = Measure.cm(fromDisplay: length, unit: bodyUnit)
+            draft.headCM = Measure.cm(fromDisplay: head, unit: bodyUnit)
         case .medicine:
             draft.label = [medicine, dose].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " · ")
         case .tummyTime:
             draft.endedAt = when.addingTimeInterval(Double(minutes) * 60)
         case .temperature:
-            draft.temperatureC = Measure.celsius(fromDisplay: temperature, unit: unit)
+            draft.temperatureC = Measure.celsius(fromDisplay: temperature, unit: bodyUnit)
         default:
             break
         }

@@ -157,13 +157,13 @@ final class LogbookTests: XCTestCase {
 
 final class MeasureTests: XCTestCase {
     func testWeightAndLengthFormatting() {
-        XCTAssertEqual(Measure.weight(grams: (7 * 16 + 4) * Measure.gramsPerOunce, unit: .ounces), "7 lb 4 oz")
-        XCTAssertEqual(Measure.weight(grams: 3290, unit: .milliliters), "3.29 kg")
-        XCTAssertNil(Measure.weight(grams: 0, unit: .ounces))
-        XCTAssertEqual(Measure.length(cm: 20 * Measure.cmPerInch, unit: .ounces, label: ""), "20 in")
-        XCTAssertEqual(Measure.length(cm: 50.8, unit: .milliliters, label: "head"), "head 50.8 cm")
-        XCTAssertEqual(Measure.temperature(celsius: 38, unit: .milliliters), "38 °C")
-        XCTAssertEqual(Measure.celsius(fromDisplay: 100.4, unit: .ounces), 38, accuracy: 0.01)
+        XCTAssertEqual(Measure.weight(grams: (7 * 16 + 4) * Measure.gramsPerOunce, unit: .imperial), "7 lb 4 oz")
+        XCTAssertEqual(Measure.weight(grams: 3290, unit: .metric), "3.29 kg")
+        XCTAssertNil(Measure.weight(grams: 0, unit: .imperial))
+        XCTAssertEqual(Measure.length(cm: 20 * Measure.cmPerInch, unit: .imperial, label: ""), "20 in")
+        XCTAssertEqual(Measure.length(cm: 50.8, unit: .metric, label: "head"), "head 50.8 cm")
+        XCTAssertEqual(Measure.temperature(celsius: 38, unit: .metric), "38 °C")
+        XCTAssertEqual(Measure.celsius(fromDisplay: 100.4, unit: .imperial), 38, accuracy: 0.01)
     }
 }
 
@@ -271,7 +271,7 @@ final class BabyWeightTests: XCTestCase {
         XCTAssertEqual(BabyWeight.lb7oz4.grams, (7 * 16 + 4) * Measure.gramsPerOunce, accuracy: 0.001)
         XCTAssertEqual(BabyWeight.lb5oz0.grams, 80 * Measure.gramsPerOunce, accuracy: 0.001)
         XCTAssertEqual(BabyWeight.allCases.count, 11 * 16)
-        XCTAssertEqual(Measure.weight(grams: BabyWeight.lb7oz4.grams, unit: .ounces), "7 lb 4 oz")
+        XCTAssertEqual(Measure.weight(grams: BabyWeight.lb7oz4.grams, unit: .imperial), "7 lb 4 oz")
         for weight in BabyWeight.allCases {
             XCTAssertNotNil(BabyWeight.caseDisplayRepresentations[weight], "\(weight.rawValue) has no spoken form")
         }

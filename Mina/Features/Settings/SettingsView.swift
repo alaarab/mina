@@ -17,6 +17,7 @@ struct SettingsView: View {
     @ObservedObject private var sharing = ShareManager.shared
     @AppStorage(Prefs.nameKey, store: Prefs.defaults) private var yourName = ""
     @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @AppStorage(Prefs.bodyUnitKey, store: Prefs.defaults) private var bodyUnitRaw = BodyUnit.imperial.rawValue
     @State private var name: String
     @State private var birthDate: Date
     @State private var siriTipVisible = true
@@ -202,7 +203,9 @@ struct SettingsView: View {
                     Picker("Bottle amounts", selection: $unitRaw) {
                         ForEach(VolumeUnit.allCases) { Text($0.title).tag($0.rawValue) }
                     }
-                    .pickerStyle(.segmented)
+                    Picker("Weight, length, temperature", selection: $bodyUnitRaw) {
+                        ForEach(BodyUnit.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
                 }
 
                 Section {

@@ -51,10 +51,20 @@ enum FeatureFlags {
     static let nanit = false
 }
 
+/// Weight, length and temperature units, separate from the bottle unit so a
+/// millilitre household can still weigh in pounds and ounces.
+enum BodyUnit: String, CaseIterable, Identifiable {
+    case imperial, metric
+    var id: String { rawValue }
+    var title: String { self == .imperial ? "lb / oz, in, °F" : "kg, cm, °C" }
+    var isImperial: Bool { self == .imperial }
+}
+
 /// Settings shared between the app and its widgets through the App Group.
 enum Prefs {
     static let appGroup = Bundle.main.bundleIdentifier?.hasSuffix(".recovery") == true ? "group.com.alaarab.mina.recovery" : "group.com.alaarab.mina"
     static let unitKey = "volumeUnit"
+    static let bodyUnitKey = "bodyUnit"
     static let nameKey = "yourName"
     static let lastBottleKey = "lastBottleML"
     static let partnerAlertsKey = "partnerAlerts"
@@ -73,6 +83,10 @@ enum Prefs {
 
     static var unit: VolumeUnit {
         VolumeUnit(rawValue: defaults.string(forKey: unitKey) ?? "") ?? .ounces
+    }
+    /// Defaults to pounds and ounces regardless of the bottle unit.
+    static var bodyUnit: BodyUnit {
+        BodyUnit(rawValue: defaults.string(forKey: bodyUnitKey) ?? "") ?? .imperial
     }
     static var yourName: String {
         (defaults.string(forKey: nameKey) ?? "").trimmingCharacters(in: .whitespaces)
