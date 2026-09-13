@@ -1,0 +1,15 @@
+Mina.xcodeproj/
+.dd*/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+
+Mina/Resources/Info.plist
+Mina/Resources/Mina.entitlements
+MinaWidgets/Info.plist
+MinaWidgets/MinaWidgets.entitlements
+
+Local.xcconfig
+.DS_Store
+.claude/
