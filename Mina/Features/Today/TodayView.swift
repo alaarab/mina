@@ -94,6 +94,13 @@ private struct TodayContent: View {
             .errorAlert($error)
             .onAppear { scheduleFeedAlerts() }
             .onChange(of: entries.count) { _, _ in scheduleFeedAlerts() }
+            .onChange(of: baby.onDutyDeviceID) { _, _ in scheduleFeedAlerts() }
+            .onChange(of: baby.shiftsJSON) { _, _ in scheduleFeedAlerts() }
+            // A partner's "I'm on" arrives through CloudKit; refresh the baby row when the store changes.
+            .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange).receive(on: RunLoop.main)) { _ in
+                context.refresh(baby, mergeChanges: true)
+                scheduleFeedAlerts()
+            }
         }
     }
 
