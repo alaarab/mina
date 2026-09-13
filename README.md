@@ -70,10 +70,18 @@ Every entry can be opened from any list to fix the amount, the time (with
 ## Feed alarm and partner pushes
 
 Settings → Notifications → **Feed alarm** turns on a real alarm (iOS 26's Alarm
-framework): it rings through silent mode and Focus, moves itself to last feed +
-your chosen gap (or her predicted next feed) every time a feed is logged, and
-its **Log feed** button records a bottle at the last amount from the lock
-screen. Snooze is 10 minutes. Older iOS keeps the plain notification reminder.
+framework): it rings through silent mode and Focus and moves itself to last
+feed + your chosen gap (or her predicted next feed) every time a feed is
+logged. Stopping the alarm only means you're up; when you open the app it asks
+"Did she eat?" with a one-tap Log, so nothing is recorded that didn't happen.
+Snooze is 10 minutes. Older iOS keeps the plain notification reminder.
+
+## Who's on
+
+Tap **I'm on** on Today and only your phone rings the alarm and gets partner
+alerts; **Hand off** gives it back. Settings → Who's on → Shifts sets a nightly
+schedule (blocks can cross midnight) that both phones follow. With nothing set,
+both phones get everything. Any number of caregivers can be on the share.
 
 Partner alerts on the log owner's phone use a CloudKit subscription, so they
 arrive even when Mina has been force-quit. The partner's phone gets them

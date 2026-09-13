@@ -181,6 +181,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink { ShiftsView(baby: baby) } label: {
+                        LabeledContent("Shifts", value: Shifts.blocks(for: baby).isEmpty ? "Off" : "\(Shifts.blocks(for: baby).count) blocks")
+                    }
+                } header: {
+                    Text("Who's on")
+                } footer: {
+                    Text("Only the phone that's on rings the feed alarm and gets partner alerts. Tap “I'm on” on Today to take over any time, or set a nightly schedule here. With nothing set, both phones get everything.")
+                }
+
+                Section {
                     TextField("Your name", text: $yourName)
                 } header: {
                     Text("You")
@@ -320,5 +330,62 @@ struct AddBabySheet: View {
             }
             .errorAlert($error)
         }
+    }
+}
+
+
+/// A nightly schedule: blocks of time with a name on each. Stored on the
+/// shared baby so both phones see the same plan.
+struct ShiftsView: View {
+    @ObservedObject var baby: Baby
+    @Environment(\.managedObjectContext) private var context
+    @State private var blocks: [ShiftBlock] = []
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach($blocks) { $block in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Who", text: $block.name)
+                        HStack {
+                            DatePicker("From", selection: minuteBinding($block.startMinute), displayedComponents: .hourAndMinute).labelsHidden()
+                            Text("to").foregroundStyle(MinaTheme.textMuted)
+                            DatePicker("To", selection: minuteBinding($block.endMinute), displayedComponents: .hourAndMinute).labelsHidden()
+                            Spacer()
+                            Button { block.deviceID = Prefs.deviceID; block.name = Prefs.yourName.isEmpty ? block.name : Prefs.yourName } label: {
+                                Image(systemName: block.deviceID == Prefs.deviceID ? "iphone.badge.checkmark" : "iphone")
+                            }
+                            .buttonStyle(.bordered).accessibilityLabel("This is my phone")
+                        }
+                    }
+                }
+                .onDelete { blocks.remove(atOffsets: $0) }
+                Button { blocks.append(ShiftBlock(name: Prefs.yourName.isEmpty ? "Me" : Prefs.yourName, deviceID: Prefs.deviceID, startMinute: 21 * 60, endMinute: 2 * 60)) } label: {
+                    Label("Add a block", systemImage: "plus")
+                }
+            } header: {
+                Text("Schedule")
+            } footer: {
+                Text("Blocks can cross midnight. Tap the phone icon on your own block so it follows your phone even if you rename yourself. Anything outside a block goes to both phones.")
+            }
+            if !blocks.isEmpty {
+                Section {
+                    Button("Clear the schedule", role: .destructive) { blocks = [] }
+                }
+            }
+        }
+        .navigationTitle("Shifts")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { blocks = Shifts.blocks(for: baby) }
+        .onChange(of: blocks) { _, value in
+            do { try Shifts.save(value, to: baby, in: context) } catch { self.error = error.localizedDescription }
+        }
+        .errorAlert($error)
+    }
+
+    private func minuteBinding(_ minute: Binding<Int>) -> Binding<Date> {
+        Binding(get: { Calendar.current.date(bySettingHour: minute.wrappedValue / 60, minute: minute.wrappedValue % 60, second: 0, of: .now) ?? .now },
+                set: { minute.wrappedValue = Calendar.current.component(.hour, from: $0) * 60 + Calendar.current.component(.minute, from: $0) })
     }
 }

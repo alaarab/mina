@@ -108,6 +108,7 @@ final class PartnerAlerts {
                 }
             }
             guard !inserted.isEmpty, Prefs.partnerAlerts, !Self.usesCloudSubscription else { return }
+            if let baby = Logbook.shared.currentBaby(in: context), !Shifts.thisPhoneIsOn(for: baby) { return }
 
             let cutoff = Date.now.addingTimeInterval(-6 * 3600)
             var entries: [LogEntry] = []

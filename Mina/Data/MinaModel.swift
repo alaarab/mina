@@ -15,6 +15,12 @@ public final class Baby: NSManagedObject {
     @NSManaged public var name: String?
     @NSManaged public var birthDate: Date?
     @NSManaged public var entries: NSSet?
+    /// Who's on right now (a device id) and since when; nil means everyone.
+    @NSManaged public var onDutyDeviceID: String?
+    @NSManaged public var onDutyName: String?
+    @NSManaged public var onDutySince: Date?
+    /// JSON list of shift blocks; see `Shifts`.
+    @NSManaged public var shiftsJSON: String?
 }
 
 @objc(LogEntry)
@@ -168,6 +174,10 @@ enum MinaModel {
             attribute("id", .UUIDAttributeType),
             attribute("name", .stringAttributeType),
             attribute("birthDate", .dateAttributeType),
+            attribute("onDutyDeviceID", .stringAttributeType),
+            attribute("onDutyName", .stringAttributeType),
+            attribute("onDutySince", .dateAttributeType),
+            attribute("shiftsJSON", .stringAttributeType),
             babyEntries,
         ]
         entry.properties = [

@@ -448,3 +448,27 @@ final class MultipleBabiesTests: XCTestCase {
         XCTAssertEqual(logbook.entries(for: second, from: .distantPast, in: context).count, 2)
     }
 }
+
+
+final class ShiftTests: XCTestCase {
+    func testBlocksWrapMidnightAndManualOverridesSchedule() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let mine = ShiftBlock(name: "Me", deviceID: Prefs.deviceID, startMinute: 21 * 60, endMinute: 2 * 60)
+        let theirs = ShiftBlock(name: "Partner", deviceID: "other-phone", startMinute: 2 * 60, endMinute: 7 * 60)
+        try Shifts.save([mine, theirs], to: baby, in: context)
+        let cal = Calendar.current
+        let at = { (h: Int) in cal.date(bySettingHour: h, minute: 30, second: 0, of: Date())! }
+        XCTAssertTrue(Shifts.thisPhoneIsOn(for: baby, at: at(23)), "23:30 is in my 21:00-02:00 block")
+        XCTAssertTrue(Shifts.thisPhoneIsOn(for: baby, at: at(1)), "01:30 wraps past midnight into my block")
+        XCTAssertFalse(Shifts.thisPhoneIsOn(for: baby, at: at(4)), "04:30 is the partner's")
+        XCTAssertTrue(Shifts.thisPhoneIsOn(for: baby, at: at(12)), "outside every block, everyone is on")
+        XCTAssertEqual(Shifts.onDutyLabel(for: baby, at: at(4)), "Partner")
+        try Shifts.takeOver(baby, in: context)
+        XCTAssertTrue(Shifts.thisPhoneIsOn(for: baby, at: at(4)), "a manual take-over beats the schedule")
+        try Shifts.handOff(baby, in: context)
+        XCTAssertFalse(Shifts.thisPhoneIsOn(for: baby, at: at(4)))
+    }
+}

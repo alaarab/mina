@@ -113,6 +113,44 @@ private struct TodayContent: View {
 
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let dismissed = FeedAlarm.pendingDismissal, lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
+                HStack(spacing: 12) {
+                    Image(systemName: "alarm.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.warning).frame(width: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Feed alarm went off \(Format.ago(from: dismissed, to: now))").font(.mina(.headline))
+                        Text("Nothing logged since. Did she eat?").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                    }
+                    Spacer()
+                    Button("Log it") { sheet = .bottle }.buttonStyle(.borderedProminent).tint(MinaTheme.bottle).font(.mina(.subheadline, weight: .semibold))
+                    Button { FeedAlarm.pendingDismissal = nil } label: { Image(systemName: "xmark").frame(width: 30, height: 30) }
+                        .buttonStyle(.bordered).tint(MinaTheme.textMuted).accessibilityLabel("Dismiss")
+                }
+                Divider()
+            }
+            HStack(spacing: 12) {
+                Image(systemName: Shifts.thisPhoneIsOn(for: baby, at: now) ? "person.fill.checkmark" : "person.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Shifts.thisPhoneIsOn(for: baby, at: now) ? MinaTheme.diaper : MinaTheme.textMuted)
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let who = Shifts.onDutyLabel(for: baby, at: now) {
+                        Text(Shifts.thisPhoneIsOn(for: baby, at: now) ? "You're on" : "\(who) is on").font(.mina(.headline))
+                        Text(baby.onDutyDeviceID != nil ? "since \(Format.time(baby.onDutySince ?? now))" : "by schedule").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                    } else {
+                        Text("Nobody's on").font(.mina(.headline))
+                        Text("Alarms and alerts go to both phones").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                    }
+                }
+                Spacer()
+                if baby.onDutyDeviceID == Prefs.deviceID {
+                    Button("Hand off") { do { try Shifts.handOff(baby, in: context); scheduleFeedAlerts() } catch { self.error = error.localizedDescription } }
+                        .buttonStyle(.bordered).tint(MinaTheme.textSecondary).font(.mina(.subheadline, weight: .semibold))
+                } else {
+                    Button("I'm on") { do { try Shifts.takeOver(baby, in: context); scheduleFeedAlerts() } catch { self.error = error.localizedDescription } }
+                        .buttonStyle(.borderedProminent).tint(MinaTheme.diaper).font(.mina(.subheadline, weight: .semibold))
+                }
+            }
+            Divider()
             HStack(spacing: 12) {
                 Image(systemName: "clock.fill")
                     .font(.system(size: 20))
@@ -363,8 +401,15 @@ private struct TodayContent: View {
     // MARK: Actions
 
     private func scheduleFeedAlerts() {
-        Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now)
-        FeedAlarm.reschedule(lastFeed: lastFeed?.startedAt, prediction: feedPrediction, babyName: baby.displayName, now: now)
+        let on = Shifts.thisPhoneIsOn(for: baby, at: now)
+        Reminders.scheduleFeed(on ? feedPrediction : nil, babyName: baby.displayName, now: now)
+        if on {
+            FeedAlarm.reschedule(lastFeed: lastFeed?.startedAt, prediction: feedPrediction, babyName: baby.displayName, now: now)
+        } else {
+            FeedAlarm.cancel()
+        }
+        // A logged feed clears the "alarm dismissed, nothing logged" prompt.
+        if let dismissed = FeedAlarm.pendingDismissal, let last = lastFeed?.startedAt, last > dismissed { FeedAlarm.pendingDismissal = nil }
     }
 
     private func log(_ draft: EntryDraft) {
