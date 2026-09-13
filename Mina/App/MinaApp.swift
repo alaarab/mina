@@ -20,6 +20,15 @@ struct MinaApp: App {
         DebugLaunch.seedIfRequested(logbook: .shared, context: persistence.container.viewContext)
         PartnerAlerts.shared.start()
         EntryIndex.refresh()
+        Logbook.feedLogged = { baby, context in
+            let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
+            let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+            if Shifts.thisPhoneIsOn(for: baby) {
+                FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
+            } else {
+                FeedAlarm.cancel()
+            }
+        }
         Self.startRecoveryExportIfNeeded(persistence: persistence)
     }
 
