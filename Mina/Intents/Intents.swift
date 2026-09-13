@@ -1,6 +1,15 @@
 import AppIntents
 import Foundation
 
+/// Everything Siri and Shortcuts can do: one intent per thing a parent says out
+/// loud, each one writing through `Logbook` so a spoken feed is the same as a
+/// tapped one, plus the phrase list that teaches Siri how to hear them.
+///
+/// The two enums below are declared in MinaModel.swift because the widget
+/// target compiles that file and not this one; only their spoken forms live here.
+
+// MARK: Spoken enums
+
 extension NursingSide: AppEnum {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Side")
     static var caseDisplayRepresentations: [NursingSide: DisplayRepresentation] = [
@@ -16,6 +25,8 @@ extension DiaperKind: AppEnum {
         .both: DisplayRepresentation(title: "wet and dirty", synonyms: ["both", "full"]),
     ]
 }
+
+// MARK: Logging intents
 
 struct LogBottleIntent: AppIntent {
     static var title: LocalizedStringResource = "Log a bottle"
@@ -114,13 +125,25 @@ struct LogPoopIntent: AppIntent {
     }
 }
 
-struct LogPeeAndPoopIntent: AppIntent {
-    static var title: LocalizedStringResource = "Log a pee and poop"
-    static var description = IntentDescription("Records a diaper that was both wet and dirty.")
+struct LogPumpingIntent: AppIntent {
+    static var title: LocalizedStringResource = "Log pumping"
+    static var description = IntentDescription("Records how much was pumped.")
     static var openAppWhenRun = false
 
+    @Parameter(title: "Amount", requestValueDialog: "How much did you pump?")
+    var amount: FeedAmount
+
+    static var parameterSummary: some ParameterSummary { Summary("Log \(\.$amount) pumped") }
+
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: "\(try await logDiaper(.both))")
+        let milliliters = amount.milliliters
+        let snapshot = try await Logbook.shared.perform { context, baby in
+            var draft = EntryDraft(kind: .pumping)
+            draft.amountML = milliliters
+            draft.side = .both
+            return EntrySnapshot(entry: try Logbook.shared.add(draft, to: baby, in: context))
+        }
+        return .result(dialog: "Logged \(Prefs.unit.format(ml: milliliters)) pumped at \(Format.time(snapshot.startedAt)).")
     }
 }
 
@@ -180,6 +203,8 @@ struct LogWeightIntent: AppIntent {
     }
 }
 
+// MARK: Asking intents
+
 struct FeedStatusIntent: AppIntent {
     static var title: LocalizedStringResource = "Last feed"
     static var description = IntentDescription("Says when she last ate and how today is going.")
@@ -212,14 +237,17 @@ struct FeedStatusIntent: AppIntent {
             text = "No feeds logged for \(name) yet."
         }
         if summary.feeds > 0 {
-            text += " Today: \(summary.feeds) \(summary.feeds == 1 ? "feed" : "feeds")"
+            text += " Today: \(Format.count(summary.feeds, "feed"))"
             if summary.bottleML > 0 { text += ", \(unit.format(ml: summary.bottleML)) by bottle" }
+            // Pluralised on the day's total, not the dirty count: "1 wet and 0 dirty diaper".
             text += ", \(summary.wet) wet and \(summary.dirty) dirty \(summary.diapers == 1 ? "diaper" : "diapers")."
         }
         if let lastPoop { text += " Last poop \(Format.ago(from: lastPoop, to: now))." }
         return .result(dialog: "\(text)")
     }
 }
+
+// MARK: Phrases
 
 struct MinaShortcuts: AppShortcutsProvider {
     static var shortcutTileColor: ShortcutTileColor = .pink
@@ -270,12 +298,13 @@ struct MinaShortcuts: AppShortcutsProvider {
             "\(.applicationName) had a poopy diaper",
         ], shortTitle: "Log a poop", systemImageName: "drop.circle.fill")
 
-        AppShortcut(intent: LogPeeAndPoopIntent(), phrases: [
-            "\(.applicationName) peed and pooped",
-            "\(.applicationName) pooped and peed",
-            "\(.applicationName) just peed and pooped",
-            "\(.applicationName) did both",
-        ], shortTitle: "Log pee and poop", systemImageName: "drop.triangle.fill")
+        AppShortcut(intent: LogPumpingIntent(), phrases: [
+            "I pumped \(\.$amount) for \(.applicationName)",
+            "Pumped \(\.$amount) for \(.applicationName)",
+            "Log \(\.$amount) pumped in \(.applicationName)",
+            "Log pumping in \(.applicationName)",
+            "I pumped for \(.applicationName)",
+        ], shortTitle: "Log pumping", systemImageName: "arrow.down.to.line.circle.fill")
 
         AppShortcut(intent: StartSleepIntent(), phrases: [
             "\(.applicationName) is asleep",

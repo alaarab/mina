@@ -1,5 +1,6 @@
 import CloudKit
 import CoreData
+import Foundation
 
 /// One Core Data stack mirrored to CloudKit. The private store holds the baby
 /// you created; the shared store holds a baby your partner shared with you.
@@ -55,6 +56,14 @@ final class PersistenceController {
         for description in descriptions {
             description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
             description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+            // Encrypted while the phone has not been unlocked since boot, readable
+            // after that. Stronger protection would break the two things that have
+            // to keep working with the phone locked: CloudKit importing the
+            // partner's entries in the background, and widget timeline reloads.
+            if !inMemory {
+                description.setOption(FileProtectionType.completeUntilFirstUserAuthentication.rawValue as NSString,
+                                      forKey: NSPersistentStoreFileProtectionKey)
+            }
         }
         container.persistentStoreDescriptions = descriptions
 
@@ -78,7 +87,16 @@ final class PersistenceController {
     static func storeDirectory() -> URL {
         if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Prefs.appGroup) {
             let directory = group.appendingPathComponent("Mina", isDirectory: true)
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+            )
+            // The directory may predate this attribute, and App Group containers
+            // do not inherit the app container's default class.
+            try? FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: directory.path
+            )
             return directory
         }
         return NSPersistentContainer.defaultDirectoryURL()

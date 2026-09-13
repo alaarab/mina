@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+/// The app's visual vocabulary in one place: the warm palette every screen
+/// draws from, the rounded font ramp, and the handful of view modifiers that
+/// give cards, screen backgrounds and error alerts the same shape everywhere.
+/// Shared with the widget extension, so it stays free of app-only types.
+
+// MARK: Colors
+
 extension Color {
     init(hex: UInt32, opacity: Double = 1) {
         self.init(.sRGB,
@@ -44,11 +51,15 @@ enum MinaTheme {
     static let danger = Color(hex: 0xD9534F)
 }
 
+// MARK: Type
+
 extension Font {
     static func mina(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
         .system(style, design: .rounded, weight: weight)
     }
 }
+
+// MARK: Modifiers
 
 struct MinaCard: ViewModifier {
     var padding: CGFloat = 16
@@ -62,4 +73,19 @@ struct MinaCard: ViewModifier {
 
 extension View {
     func minaCard(padding: CGFloat = 16) -> some View { modifier(MinaCard(padding: padding)) }
+
+    /// The warm page background every full screen and sheet sits on.
+    func minaCanvas() -> some View { background(MinaTheme.canvas.ignoresSafeArea()) }
+
+    /// Shows `message` in a one-button alert and clears it on dismiss. Every
+    /// screen keeps its failure in an optional `String`, so this is the whole
+    /// error path: `.errorAlert($error)`.
+    func errorAlert(_ message: Binding<String?>, title: String = "Couldn't save") -> some View {
+        alert(title, isPresented: Binding(get: { message.wrappedValue != nil },
+                                          set: { if !$0 { message.wrappedValue = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(message.wrappedValue ?? "")
+        }
+    }
 }

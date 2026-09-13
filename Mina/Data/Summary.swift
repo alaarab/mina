@@ -1,5 +1,12 @@
 import Foundation
 
+/// Rolls a day's entries up into totals, and formats the small pieces of text
+/// that those totals turn into. Both are pure value work shared by the app,
+/// the widgets and the Siri answers, so every surface counts and phrases a day
+/// the same way.
+
+// MARK: Totals
+
 /// Totals for one calendar day. Sleep is clipped to the day, so a nap that
 /// crosses midnight counts on both sides, and an ongoing sleep counts up to now.
 struct DaySummary {
@@ -38,7 +45,7 @@ struct DaySummary {
                 guard inDay else { continue }
                 feeds += 1
                 nursingCount += 1
-                nursingSeconds += entry.endedAt.map { max(0, $0.timeIntervalSince(startedAt)) } ?? 0
+                nursingSeconds += max(0, (entry.endedAt ?? now).timeIntervalSince(startedAt))
                 lastFeedAt = max(lastFeedAt ?? .distantPast, startedAt)
             case .diaper:
                 guard inDay else { continue }
@@ -75,7 +82,14 @@ struct DaySummary {
     }
 }
 
+// MARK: Formatting
+
 enum Format {
+    /// "1 feed", "3 feeds", "2 stretches". Pass `plural` when it isn't just an s.
+    static func count(_ value: Int, _ singular: String, _ plural: String? = nil) -> String {
+        "\(value) \(value == 1 ? singular : plural ?? singular + "s")"
+    }
+
     /// "1h 20m", "45m", "<1m".
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int((seconds / 60).rounded(.down))

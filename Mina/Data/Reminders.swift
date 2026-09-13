@@ -1,6 +1,10 @@
 import Foundation
 import UserNotifications
 
+/// The single scheduled notification the app keeps: "a feed is probably due".
+/// It's torn down and re-made from the current prediction every time the log
+/// changes, so there's never more than one pending and it's never stale.
+
 /// One pending "feed is due" notification, replaced every time the log changes.
 enum Reminders {
     static let feedKey = "feedReminders"

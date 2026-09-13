@@ -3,6 +3,12 @@ import CoreData
 import CoreSpotlight
 import Foundation
 
+/// The log as data rather than speech: entries and day totals shaped so
+/// Shortcuts, Spotlight and Apple Intelligence can read them, query them and
+/// pass them into other shortcuts.
+
+// MARK: Entries
+
 /// A log entry as Siri, Shortcuts and Apple Intelligence see it.
 struct LogEntryEntity: AppEntity, Identifiable {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Log entry")
@@ -37,7 +43,6 @@ struct LogEntryQuery: EntityQuery, EntityStringQuery {
     }
 
     func entities(matching string: String) async throws -> [LogEntryEntity] {
-        let unit = Prefs.unit
         let all = try await fetch { $0.fetchLimit = 300 }
         let needle = string.lowercased()
         return all.filter { $0.summary.lowercased().contains(needle) || $0.kind.lowercased().contains(needle) }
@@ -60,6 +65,8 @@ struct LogEntryQuery: EntityQuery, EntityStringQuery {
         }
     }
 }
+
+// MARK: Days
 
 /// "today" / "yesterday" in a Siri phrase.
 enum RelativeDay: String, AppEnum {
@@ -108,7 +115,7 @@ struct DaySummaryEntity: AppEntity, Identifiable {
         dirty = summary.dirty
         sleepHours = (summary.sleepSeconds / 360).rounded() / 10
         sleepText = Format.duration(summary.sleepSeconds)
-        var parts = ["\(summary.feeds) \(summary.feeds == 1 ? "feed" : "feeds")"]
+        var parts = [Format.count(summary.feeds, "feed")]
         if summary.bottleML > 0 { parts.append("\(unit.format(ml: summary.bottleML)) by bottle") }
         if summary.nursingSeconds > 0 { parts.append("\(Int(summary.nursingSeconds / 60)) minutes nursing") }
         parts.append("\(summary.wet) wet and \(summary.dirty) dirty diapers")
@@ -184,6 +191,8 @@ struct RecentEntriesIntent: AppIntent {
         return .result(value: entries)
     }
 }
+
+// MARK: Spotlight
 
 /// Spotlight and Siri semantic search over recent entries (iOS 18+).
 enum EntryIndex {

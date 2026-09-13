@@ -1,4 +1,12 @@
 import Foundation
+import SwiftUI
+
+/// Everything the app remembers between launches, and the unit system that
+/// shapes how amounts are typed and read back. Both live in the App Group so
+/// the widgets, the Siri intents and the app itself agree on a bottle size and
+/// on which phone logged what.
+
+// MARK: Units
 
 enum VolumeUnit: String, CaseIterable, Identifiable {
     case ounces, milliliters
@@ -34,6 +42,8 @@ enum VolumeUnit: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: Stored settings
+
 /// Settings shared between the app and its widgets through the App Group.
 enum Prefs {
     static let appGroup = "group.com.alaarab.mina"
@@ -42,6 +52,7 @@ enum Prefs {
     static let lastBottleKey = "lastBottleML"
     static let partnerAlertsKey = "partnerAlerts"
     static let deviceIDKey = "deviceID"
+    static let lastNursingSideKey = "lastNursingSide"
 
     static let defaults: UserDefaults = {
         let group = UserDefaults(suiteName: appGroup) ?? .standard
@@ -65,6 +76,19 @@ enum Prefs {
     static func rememberBottle(ml: Double) {
         defaults.set(ml, forKey: lastBottleKey)
     }
+    /// The side she finished on last time, so the next feed can start on the other.
+    static var lastNursingSide: NursingSide? {
+        get { defaults.string(forKey: lastNursingSideKey).flatMap(NursingSide.init(rawValue:)) }
+        set { defaults.set(newValue?.rawValue, forKey: lastNursingSideKey) }
+    }
+    static var suggestedNursingSide: NursingSide {
+        switch lastNursingSide {
+        case .left: return .right
+        case .right: return .left
+        default: return .left
+        }
+    }
+
     static var partnerAlerts: Bool {
         defaults.object(forKey: partnerAlertsKey) == nil ? true : defaults.bool(forKey: partnerAlertsKey)
     }
@@ -77,4 +101,14 @@ enum Prefs {
         defaults.set(fresh, forKey: deviceIDKey)
         return fresh
     }
+}
+
+/// The chosen bottle unit, read straight into a view and kept live when
+/// Settings changes it: `@StoredVolumeUnit private var unit`. Wraps the
+/// `@AppStorage` string so no screen has to decode the raw value itself.
+@propertyWrapper
+struct StoredVolumeUnit: DynamicProperty {
+    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var raw = VolumeUnit.ounces.rawValue
+
+    var wrappedValue: VolumeUnit { VolumeUnit(rawValue: raw) ?? .ounces }
 }

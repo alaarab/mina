@@ -1,5 +1,10 @@
 import Foundation
 
+/// The age-by-age content behind the Guide tab, and the typical ranges the
+/// Today screen quotes as "expect 7–10 a day". Plain data, in the spirit of AAP
+/// guidance, with the stages laid end to end so every day of her first year
+/// falls in exactly one.
+
 /// Typical ranges for a stage, used both in the guide and as "expect" hints
 /// on the Today screen.
 struct Expectation {
@@ -36,8 +41,6 @@ struct GuideStage: Identifiable {
 /// General newborn ranges in the spirit of AAP guidance. Not medical advice;
 /// the pediatrician who has actually met the baby always wins.
 enum Guidance {
-    static let oz = VolumeUnit.millilitersPerOunce
-
     static func stage(forAgeDays days: Int) -> GuideStage {
         stages.first { $0.ageDays.contains(max(0, days)) } ?? stages[stages.count - 1]
     }

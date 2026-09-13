@@ -2,6 +2,13 @@ import CoreData
 import Foundation
 import WidgetKit
 
+/// The one door into the log. Drafts and snapshots carry entries in and out of
+/// Core Data as plain values, and `Logbook` owns every write so the app, the
+/// widgets and Siri agree on how an entry is made, which store it lands in, and
+/// who gets credit for the 3 AM feed.
+
+// MARK: Values
+
 /// What a new or edited entry looks like before it touches Core Data.
 struct EntryDraft {
     var kind: EntryKind
@@ -61,6 +68,8 @@ struct EntrySnapshot {
     }
 }
 
+// MARK: Errors
+
 enum LogbookError: Error, LocalizedError, CustomLocalizedStringResourceConvertible {
     case notSetUp
 
@@ -68,9 +77,15 @@ enum LogbookError: Error, LocalizedError, CustomLocalizedStringResourceConvertib
     var localizedStringResource: LocalizedStringResource { "Open Mina and set up your baby first." }
 }
 
+// MARK: Logbook
+
 /// Every write goes through here so the app and Siri agree on how entries are
 /// made, which store they live in, and who gets credit for the 3 AM feed.
-final class Logbook {
+///
+/// Unchecked because its only stored property is a `let`, and the Core Data
+/// work it hands off is already confined by `context.perform`. Siri runs its
+/// intents off the main actor, so the type has to cross that boundary.
+final class Logbook: @unchecked Sendable {
     static let shared = Logbook(persistence: .shared)
 
     let persistence: PersistenceController
@@ -85,6 +100,7 @@ final class Logbook {
 
     @discardableResult
     func createBaby(name: String, birthDate: Date, in context: NSManagedObjectContext) throws -> Baby {
+        // The model above names "Baby" as this exact class, so the cast holds.
         let baby = NSEntityDescription.insertNewObject(forEntityName: "Baby", into: context) as! Baby
         baby.id = UUID()
         baby.name = name
@@ -97,7 +113,8 @@ final class Logbook {
     // MARK: Entries
 
     @discardableResult
-    func add(_ draft: EntryDraft, to baby: Baby, in context: NSManagedObjectContext) throws -> LogEntry {
+    func add(_ draft: EntryDraft, to baby: Baby, in context: NSManagedObjectContext, save: Bool = true) throws -> LogEntry {
+        // The model above names "LogEntry" as this exact class, so the cast holds.
         let entry = NSEntityDescription.insertNewObject(forEntityName: "LogEntry", into: context) as! LogEntry
         entry.id = UUID()
         entry.createdAt = .now
@@ -106,7 +123,9 @@ final class Logbook {
         entry.baby = baby
         // A shared baby lives in the shared store; its entries must too.
         if let store = baby.objectID.persistentStore { context.assign(entry, to: store) }
+        guard save else { return entry }
         try context.save()
+        if draft.kind == .nursing, draft.endedAt != nil, let side = draft.side, side != .both { Prefs.lastNursingSide = side }
         Self.widgetsChanged()
         return entry
     }
@@ -160,6 +179,61 @@ final class Logbook {
         try context.save()
         Self.widgetsChanged()
         return sleep
+    }
+
+    // MARK: Nursing timer
+
+    func ongoingNursing(for baby: Baby, in context: NSManagedObjectContext) -> LogEntry? {
+        let request = LogEntry.request()
+        request.predicate = NSPredicate(format: "baby == %@ AND kindRaw == %@ AND endedAt == nil", baby, EntryKind.nursing.rawValue)
+        request.fetchLimit = 1
+        return try? context.fetch(request).first
+    }
+
+    /// Starts the timer on one side. `label` accumulates the per-side split.
+    @discardableResult
+    func startNursing(side: NursingSide, for baby: Baby, at date: Date = .now, in context: NSManagedObjectContext) throws -> LogEntry {
+        if let running = ongoingNursing(for: baby, in: context) { return running }
+        var draft = EntryDraft(kind: .nursing, startedAt: date)
+        draft.side = side
+        draft.label = "\(side.rawValue):\(Int(date.timeIntervalSince1970))"
+        return try add(draft, to: baby, in: context)
+    }
+
+    /// Records the side change; the entry's side becomes `both`.
+    func switchNursingSide(_ entry: LogEntry, at date: Date = .now, in context: NSManagedObjectContext) throws {
+        guard entry.isOngoingNursing, let current = entry.side else { return }
+        let next: NursingSide = current == .left ? .right : .left
+        entry.label = (entry.label ?? "") + "|\(next.rawValue):\(Int(date.timeIntervalSince1970))"
+        entry.side = .both
+        try context.save()
+    }
+
+    @discardableResult
+    func endNursing(_ entry: LogEntry, at date: Date = .now, in context: NSManagedObjectContext) throws -> LogEntry {
+        guard entry.isOngoingNursing else { return entry }
+        entry.endedAt = max(date, entry.startedAt ?? date)
+        // Turn the raw side log into "left 8m · right 6m" and remember the last side.
+        let segments = (entry.label ?? "").split(separator: "|").compactMap { part -> (NursingSide, Date)? in
+            let bits = part.split(separator: ":")
+            guard bits.count == 2, let side = NursingSide(rawValue: String(bits[0])), let stamp = Double(bits[1]) else { return nil }
+            return (side, Date(timeIntervalSince1970: stamp))
+        }
+        if !segments.isEmpty {
+            var totals: [NursingSide: TimeInterval] = [:]
+            for (index, segment) in segments.enumerated() {
+                let end = index + 1 < segments.count ? segments[index + 1].1 : entry.endedAt ?? date
+                totals[segment.0, default: 0] += max(0, end.timeIntervalSince(segment.1))
+            }
+            entry.label = [NursingSide.left, .right].compactMap { side in totals[side].map { "\(side.rawValue) \(Format.duration($0))" } }.joined(separator: " · ")
+            Prefs.lastNursingSide = segments.last?.0
+        } else {
+            entry.label = nil
+            Prefs.lastNursingSide = entry.side == .both ? nil : entry.side
+        }
+        try context.save()
+        Self.widgetsChanged()
+        return entry
     }
 
     func lastFeed(for baby: Baby, in context: NSManagedObjectContext) -> LogEntry? {
