@@ -239,7 +239,7 @@ struct LogWeightIntent: AppIntent {
             draft.weightGrams = grams
             return EntrySnapshot(entry: try Logbook.shared.add(draft, to: baby, in: context))
         }
-        return .result(dialog: "Logged \(Measure.weight(grams: grams, unit: Prefs.unit) ?? "") for \(snapshot.babyName).")
+        return .result(dialog: "Logged \(Measure.weight(grams: grams) ?? "") for \(snapshot.babyName).")
     }
 }
 

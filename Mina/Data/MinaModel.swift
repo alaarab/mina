@@ -317,7 +317,7 @@ extension LogEntry {
             if let side { parts.append(side.title.lowercased()) }
             return parts.joined(separator: " · ")
         case .growth:
-            let parts = [Measure.weight(grams: weightGrams, unit: unit), Measure.length(cm: lengthCM, unit: unit, label: ""), Measure.length(cm: headCM, unit: unit, label: "head")]
+            let parts = [Measure.weight(grams: weightGrams), Measure.length(cm: lengthCM, label: ""), Measure.length(cm: headCM, label: "head")]
                 .compactMap { $0 }
             return parts.isEmpty ? "Growth" : parts.joined(separator: " · ")
         case .medicine:
@@ -329,7 +329,7 @@ extension LogEntry {
         case .bath:
             return "Bath"
         case .temperature:
-            return temperatureC > 0 ? "Temperature · \(Measure.temperature(celsius: temperatureC, unit: unit))" : "Temperature"
+            return temperatureC > 0 ? "Temperature · \(Measure.temperature(celsius: temperatureC))" : "Temperature"
         case .milestone:
             let text = (label ?? "").trimmingCharacters(in: .whitespaces)
             return text.isEmpty ? "Milestone" : "★ \(text)"
@@ -357,15 +357,15 @@ extension Baby: Identifiable {}
 
 // MARK: Measurements
 
-/// Growth and temperature follow the bottle unit: ounces means lb/oz, inches
-/// and °F; milliliters means kg, cm and °C.
+/// Growth and temperature follow the body unit (Settings → Units): pounds and
+/// ounces, inches and °F, or kilograms, centimetres and °C.
 enum Measure {
     static let gramsPerOunce = 28.3495
     static let cmPerInch = 2.54
 
-    static func weight(grams: Double, unit: VolumeUnit) -> String? {
+    static func weight(grams: Double, unit: BodyUnit = Prefs.bodyUnit) -> String? {
         guard grams > 0 else { return nil }
-        if unit == .ounces {
+        if unit.isImperial {
             let totalOunces = grams / gramsPerOunce
             let pounds = Int(totalOunces / 16)
             let ounces = totalOunces - Double(pounds) * 16
@@ -374,18 +374,18 @@ enum Measure {
         return "\(VolumeUnit.trim((grams / 1000 * 100).rounded() / 100)) kg"
     }
 
-    static func length(cm: Double, unit: VolumeUnit, label: String) -> String? {
+    static func length(cm: Double, unit: BodyUnit = Prefs.bodyUnit, label: String) -> String? {
         guard cm > 0 else { return nil }
-        let text = unit == .ounces ? "\(VolumeUnit.trim((cm / cmPerInch * 4).rounded() / 4)) in" : "\(VolumeUnit.trim((cm * 10).rounded() / 10)) cm"
+        let text = unit.isImperial ? "\(VolumeUnit.trim((cm / cmPerInch * 4).rounded() / 4)) in" : "\(VolumeUnit.trim((cm * 10).rounded() / 10)) cm"
         return label.isEmpty ? text : "\(label) \(text)"
     }
 
-    static func temperature(celsius: Double, unit: VolumeUnit) -> String {
-        if unit == .ounces { return "\(VolumeUnit.trim((celsius * 9 / 5 + 32) * 10 / 10)) °F".replacingOccurrences(of: ".0 ", with: " ") }
+    static func temperature(celsius: Double, unit: BodyUnit = Prefs.bodyUnit) -> String {
+        if unit.isImperial { return "\(VolumeUnit.trim((celsius * 9 / 5 + 32) * 10 / 10)) °F".replacingOccurrences(of: ".0 ", with: " ") }
         return "\(VolumeUnit.trim((celsius * 10).rounded() / 10)) °C"
     }
 
     /// Back from what a stepper shows to what the entry stores.
-    static func celsius(fromDisplay value: Double, unit: VolumeUnit) -> Double { unit == .ounces ? (value - 32) * 5 / 9 : value }
-    static func cm(fromDisplay value: Double, unit: VolumeUnit) -> Double { unit == .ounces ? value * cmPerInch : value }
+    static func celsius(fromDisplay value: Double, unit: BodyUnit = Prefs.bodyUnit) -> Double { unit.isImperial ? (value - 32) * 5 / 9 : value }
+    static func cm(fromDisplay value: Double, unit: BodyUnit = Prefs.bodyUnit) -> Double { unit.isImperial ? value * cmPerInch : value }
 }

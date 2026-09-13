@@ -2,6 +2,11 @@
 
 Newest first. Versions are 0.0.<build>. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
+## 0.0.17
+
+### New
+- Weight, length and temperature have their own unit setting (pounds and ounces by default), separate from bottle amounts.
+
 ## 0.0.16
 
 ### New
