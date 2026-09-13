@@ -35,6 +35,7 @@ struct TrendsView: View {
     @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var reportURL: URL?
+    @State private var asking = false
 
     private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
     private static let days = 14
@@ -63,6 +64,9 @@ struct TrendsView: View {
             .background(MinaTheme.canvas.ignoresSafeArea())
             .navigationTitle("Trends")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { asking = true } label: { Label("Ask", systemImage: "sparkles") }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if let reportURL {
                         ShareLink(item: reportURL, subject: Text("\(baby.displayName)'s week")) {
@@ -74,6 +78,9 @@ struct TrendsView: View {
                 }
             }
             .task(id: entries.count) { reportURL = await Report.render(baby: baby, stats: week, entries: Array(entries), unit: unit) }
+            .sheet(isPresented: $asking) {
+                AskView(baby: baby, stats: stats, recent: entries.prefix(12).map { "\(($0.startedAt ?? .now).formatted(.dateTime.weekday(.abbreviated).hour().minute())): \($0.title(unit: unit))" }, unit: unit)
+            }
         }
     }
 

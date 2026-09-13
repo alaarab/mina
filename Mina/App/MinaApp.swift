@@ -14,6 +14,7 @@ struct MinaApp: App {
         MinaShortcuts.updateAppShortcutParameters()
         DebugLaunch.seedIfRequested(logbook: .shared, context: persistence.container.viewContext)
         PartnerAlerts.shared.start()
+        EntryIndex.refresh()
     }
 
     var body: some Scene {

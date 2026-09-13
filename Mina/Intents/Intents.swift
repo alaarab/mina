@@ -242,7 +242,14 @@ struct FeedStatusIntent: AppIntent {
     static var description = IntentDescription("Says when she last ate and how today is going.")
     static var openAppWhenRun = false
 
+    @Parameter(title: "Day")
+    var day: RelativeDay?
+
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        if let day, day == .yesterday {
+            let entity = try await DaySummaryEntity.load(day: day.date())
+            return .result(dialog: "Yesterday, \(entity.spoken)")
+        }
         let now = Date.now
         let (name, last, lastPoop, summary) = try await Logbook.shared.perform { context, baby -> (String, EntrySnapshot?, Date?, DaySummary) in
             let last = Logbook.shared.lastFeed(for: baby, in: context).map(EntrySnapshot.init)
@@ -358,6 +365,9 @@ struct MinaShortcuts: AppShortcutsProvider {
             "How is \(.applicationName) doing today",
             "When did \(.applicationName) last poop",
             "How many diapers has \(.applicationName) had today",
+            "How much did \(.applicationName) eat \(\.$day)",
+            "How did \(.applicationName) sleep \(\.$day)",
+            "How was \(.applicationName)'s day \(\.$day)",
         ], shortTitle: "Last feed", systemImageName: "clock.fill")
     }
 }

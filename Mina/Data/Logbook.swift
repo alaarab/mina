@@ -139,6 +139,7 @@ final class Logbook {
     /// Widgets show the last feed and today's counts; tell them when those move.
     static func widgetsChanged() {
         WidgetCenter.shared.reloadAllTimelines()
+        if !PersistenceController.isExtension { EntryIndex.refresh() }
     }
 
     func entries(for baby: Baby, from start: Date, to end: Date? = nil, in context: NSManagedObjectContext) -> [LogEntry] {
