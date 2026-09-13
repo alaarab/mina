@@ -147,6 +147,7 @@ private struct HistoryList: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.immediately)
         .scrollContentBackground(.hidden)
         .background(MinaTheme.canvas)
         .sheet(item: $editing) { EntryEditor(entry: $0) }
