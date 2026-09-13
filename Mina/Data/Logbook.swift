@@ -193,7 +193,10 @@ final class Logbook: @unchecked Sendable {
         }
     }
 
-    private static let widgetReloads = Throttle(interval: 1)
+    /// Off the main queue: neither a widget reload nor kicking off the
+    /// Spotlight rebuild needs it, and every save would otherwise put a block
+    /// on the queue the view context runs on.
+    private static let widgetReloads = Throttle(interval: 1, queue: DispatchQueue(label: "mina.widget-reloads"))
 
     func entries(for baby: Baby, from start: Date, to end: Date? = nil, in context: NSManagedObjectContext) -> [LogEntry] {
         (try? context.fetch(LogEntry.request(for: baby, from: start, to: end))) ?? []

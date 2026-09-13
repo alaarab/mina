@@ -137,6 +137,10 @@ final class LogbookTests: XCTestCase {
         XCTAssertEqual(baby.ageDays(on: day), 16)
     }
 
+    /// On the main actor on purpose: the body runs after an await, and the
+    /// view context it fetches from and deletes in is a main-queue context
+    /// that is merging the background save at that moment.
+    @MainActor
     func testBackgroundPerformFindsBabyAndDeleteRemoves() async throws {
         let snapshot = try await logbook.perform { context, baby in
             var draft = EntryDraft(kind: .bottle)
