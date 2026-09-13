@@ -88,6 +88,7 @@ struct OnboardingView: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
             try Logbook.shared.createBaby(name: trimmed.isEmpty ? "Baby" : trimmed, birthDate: birthDate, in: context)
+            Changelog.markSeen()
         } catch {
             self.error = error.localizedDescription
         }

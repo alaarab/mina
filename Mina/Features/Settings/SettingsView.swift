@@ -243,6 +243,7 @@ struct SettingsView: View {
 
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    NavigationLink("What's new") { WhatsNewView() }
                     if let loadError = persistence.loadError {
                         Text("Storage problem: \(loadError.localizedDescription)").foregroundStyle(MinaTheme.danger)
                     }

@@ -81,9 +81,9 @@ if model.exists():
 
 run(["xcodegen", "generate"])
 project = f"{scheme}.xcodeproj"
-settings = [f"CURRENT_PROJECT_VERSION={build_number}", f"DEVELOPMENT_TEAM={config['team']}", "CODE_SIGN_STYLE=Automatic"]
-if args.marketing_version:
-    settings.append(f"MARKETING_VERSION={args.marketing_version}")
+# Mina's version is 0.0.<build> so the two numbers never drift; --marketing-version overrides.
+settings = [f"CURRENT_PROJECT_VERSION={build_number}", f"MARKETING_VERSION={args.marketing_version or f'0.0.{build_number}'}",
+            f"DEVELOPMENT_TEAM={config['team']}", "CODE_SIGN_STYLE=Automatic"]
 
 if not args.skip_tests:
     run(["xcodebuild", "-project", project, "-scheme", scheme, "-destination", "platform=iOS Simulator,name=iPhone 17 Pro",

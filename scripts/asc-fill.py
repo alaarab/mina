@@ -5,14 +5,21 @@ def between(start, end):
     a = t.index(start) + len(start); b = t.index(end, a); return t[a:b].strip()
 desc = between("**Description** (4000):", "**Keywords**"); promo = between("**Promotional text** (170):", "**Description**")
 kw = between("**Keywords** (100):", "**What's new**"); notes = t.split("**Review notes**:")[1].strip()
+changelog = (pathlib.Path(__file__).parent.parent / "CHANGELOG.md").read_text()
+newest = changelog.split("\n## ")[1]
+whats_new = "\n".join(l[2:] for l in newest.split("\n") if l.startswith("- "))[:4000]
 VERSION = "d8bace76-8047-4f98-8c82-5e8466535ea2"; INFO = "d77a3162-b64b-45bc-9409-7929b0cd566e"
 
 locs = call("GET", f"/appStoreVersions/{VERSION}/appStoreVersionLocalizations")["data"]
 loc = next((l for l in locs if l["attributes"]["locale"] == "en-US"), None)
-attrs = {"description": desc, "keywords": kw, "promotionalText": promo,
+attrs = {"description": desc, "keywords": kw, "promotionalText": promo, "whatsNew": whats_new,
          "supportUrl": "https://alaarab.github.io/mina/", "marketingUrl": "https://alaarab.github.io/mina/"}
 if loc:
-    call("PATCH", f"/appStoreVersionLocalizations/{loc['id']}", {"data": {"type": "appStoreVersionLocalizations", "id": loc["id"], "attributes": attrs}})
+    try:
+        call("PATCH", f"/appStoreVersionLocalizations/{loc['id']}", {"data": {"type": "appStoreVersionLocalizations", "id": loc["id"], "attributes": attrs}})
+    except SystemExit:
+        attrs.pop("whatsNew", None)   # a first version has no What's New field
+        call("PATCH", f"/appStoreVersionLocalizations/{loc['id']}", {"data": {"type": "appStoreVersionLocalizations", "id": loc["id"], "attributes": attrs}})
 else:
     loc = call("POST", "/appStoreVersionLocalizations", {"data": {"type": "appStoreVersionLocalizations", "attributes": dict(locale="en-US", **attrs),
                "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": VERSION}}}}})["data"]

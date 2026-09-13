@@ -156,6 +156,7 @@ struct RootView: View {
 struct MainTabs: View {
     @ObservedObject var baby: Baby
     @State private var tab = DebugLaunch.initialTab ?? "today"
+    @State private var showingWhatsNew = Changelog.shouldShow && !DebugLaunch.isDemo
 
     var body: some View {
         TabView(selection: $tab) {
@@ -176,5 +177,6 @@ struct MainTabs: View {
                 .tag("settings")
         }
         .onAppear { if !DebugLaunch.isDemo { PartnerAlerts.shared.requestPermission() } }
+        .sheet(isPresented: $showingWhatsNew, onDismiss: { Changelog.markSeen() }) { WhatsNewView(onlyNewest: true) }
     }
 }
