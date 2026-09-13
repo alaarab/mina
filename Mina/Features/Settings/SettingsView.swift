@@ -208,7 +208,8 @@ struct SettingsView: View {
                 Section {
                     SiriTipView(intent: LogBottleIntent(), isVisible: $siriTipVisible)
                     VStack(alignment: .leading, spacing: 6) {
-                        siriPhrase("\(baby.displayName) just ate 4 ounces")
+                        siriPhrase("My baby just ate 4 ounces")
+                        siriPhrase("Mina ate 4 ounces")
                         siriPhrase("\(baby.displayName) nursed on the left")
                         siriPhrase("\(baby.displayName) just peed")
                         siriPhrase("\(baby.displayName) just pooped")
@@ -222,7 +223,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Siri")
                 } footer: {
-                    Text("Say “Hey Siri” and any of these. No setup needed. The app's name is the trigger word; “Mina log”, “Mina app” and “the baby” work too if Siri mishears.")
+                    Text(babies.count > 1
+                         ? "Say “Hey Siri” and any of these. “Mina”, “my baby”, “the baby” and “our baby” all work as the trigger. With more than one baby, phrases log to the baby selected above; say “log a bottle for \(baby.displayName)” to name one, or Siri asks which."
+                         : "Say “Hey Siri” and any of these. No setup needed. “Mina”, “my baby”, “the baby” and “our baby” all work as the trigger; replies use \(baby.displayName)'s name.")
                 }
 
                 Section {

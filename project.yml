@@ -42,9 +42,9 @@ targets:
         NSAlarmKitUsageDescription: Mina rings a real alarm when the next feed is due, so it gets through silent mode at night.
         NSSupportsLiveActivities: true
         INAlternativeAppNames:
-          - INAlternativeAppName: Mina log
-          - INAlternativeAppName: Mina app
+          - INAlternativeAppName: My baby
           - INAlternativeAppName: The baby
+          - INAlternativeAppName: Our baby
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -174,9 +174,9 @@ targets:
         NSAlarmKitUsageDescription: Mina rings a real alarm when the next feed is due, so it gets through silent mode at night.
         NSSupportsLiveActivities: true
         INAlternativeAppNames:
-          - INAlternativeAppName: Mina log
-          - INAlternativeAppName: Mina app
+          - INAlternativeAppName: My baby
           - INAlternativeAppName: The baby
+          - INAlternativeAppName: Our baby
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: LaunchBackground

@@ -222,3 +222,37 @@ extension LogEntryEntity: IndexedEntity {
         return attributes
     }
 }
+
+
+/// A baby as Siri sees it, so "for Olivia" resolves by name and a two-baby
+/// household gets asked "Which baby?" instead of a guess.
+struct BabyEntity: AppEntity, Identifiable {
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Baby")
+    static var defaultQuery = BabyQuery()
+
+    let id: UUID
+    @Property(title: "Name") var name: String
+
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+
+    init(baby: Baby) {
+        id = baby.id ?? UUID()
+        name = baby.displayName
+    }
+}
+
+struct BabyQuery: EntityQuery, EntityStringQuery {
+    func entities(for identifiers: [UUID]) async throws -> [BabyEntity] {
+        try await all().filter { identifiers.contains($0.id) }
+    }
+    func entities(matching string: String) async throws -> [BabyEntity] {
+        let needle = string.lowercased()
+        return try await all().filter { $0.name.lowercased().hasPrefix(needle) || needle.hasPrefix($0.name.lowercased()) }
+    }
+    func suggestedEntities() async throws -> [BabyEntity] { try await all() }
+
+    private func all() async throws -> [BabyEntity] {
+        let context = PersistenceController.shared.newBackgroundContext()
+        return try await context.perform { try context.fetch(Baby.request()).map(BabyEntity.init) }
+    }
+}
