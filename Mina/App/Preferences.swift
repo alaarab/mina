@@ -46,7 +46,7 @@ enum VolumeUnit: String, CaseIterable, Identifiable {
 
 /// Settings shared between the app and its widgets through the App Group.
 enum Prefs {
-    static let appGroup = "group.com.alaarab.mina"
+    static let appGroup = Bundle.main.bundleIdentifier?.hasSuffix(".recovery") == true ? "group.com.alaarab.mina.recovery" : "group.com.alaarab.mina"
     static let unitKey = "volumeUnit"
     static let nameKey = "yourName"
     static let lastBottleKey = "lastBottleML"

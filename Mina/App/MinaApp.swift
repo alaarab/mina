@@ -20,6 +20,20 @@ struct MinaApp: App {
         DebugLaunch.seedIfRequested(logbook: .shared, context: persistence.container.viewContext)
         PartnerAlerts.shared.start()
         EntryIndex.refresh()
+        Self.startRecoveryExportIfNeeded(persistence: persistence)
+    }
+
+    /// A build installed as com.alaarab.mina.recovery exists only to pull the
+    /// development-environment log down and write it where it can be copied off.
+    private static func startRecoveryExportIfNeeded(persistence: PersistenceController) {
+        guard Bundle.main.bundleIdentifier?.hasSuffix(".recovery") == true else { return }
+        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
+            let context = persistence.container.viewContext
+            context.perform {
+                guard let baby = Logbook.shared.currentBaby(in: context), let data = try? Backup.exportData(baby: baby, in: context) else { return }
+                try? data.write(to: Backup.autoExportURL, options: .atomic)
+            }
+        }
     }
 
     var body: some Scene {

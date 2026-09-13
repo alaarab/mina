@@ -402,3 +402,26 @@ final class DayGroupingTests: XCTestCase {
                        calendar.startOfDay(for: .distantPast), "the default puts it at the far end of the list")
     }
 }
+
+
+final class BackupTests: XCTestCase {
+    func testExportImportRoundTripIsIdempotent() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        var bottle = EntryDraft(kind: .bottle); bottle.amountML = 120
+        try logbook.add(bottle, to: baby, in: context)
+        var growth = EntryDraft(kind: .growth); growth.weightGrams = 3400
+        try logbook.add(growth, to: baby, in: context)
+        let data = try Backup.exportData(baby: baby, in: context)
+
+        let other = PersistenceController(inMemory: true)
+        let target = try Logbook(persistence: other).createBaby(name: "Test", birthDate: .now, in: other.container.viewContext)
+        XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 2)
+        XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 0, "second import adds nothing")
+        let entries = Logbook(persistence: other).entries(for: target, from: .distantPast, in: other.container.viewContext)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.first { $0.kind == .growth }?.weightGrams, 3400)
+    }
+}
