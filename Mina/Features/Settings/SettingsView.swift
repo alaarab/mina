@@ -25,6 +25,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.partnerAlertsKey, store: Prefs.defaults) private var partnerAlerts = true
     @AppStorage(Reminders.feedKey, store: Prefs.defaults) private var feedReminders = false
     @AppStorage(FeedAlarm.onKey, store: Prefs.defaults) private var feedAlarm = false
+    @AppStorage(WeeklyDigest.onKey, store: Prefs.defaults) private var weeklyDigest = true
     @AppStorage(FeedAlarm.gapKey, store: Prefs.defaults) private var feedAlarmGap = 180
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @ObservedObject private var nanit = NanitSync.shared
@@ -121,6 +122,8 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Alert me when my partner logs", isOn: $partnerAlerts)
+                    Toggle("Sunday evening digest", isOn: $weeklyDigest)
+                        .onChange(of: weeklyDigest) { _, _ in WeeklyDigest.schedule(for: baby, in: context) }
                     Toggle("Remind me when a feed is due", isOn: $feedReminders)
                         .onChange(of: feedReminders) { _, on in
                             if !on { Reminders.scheduleFeed(nil, babyName: baby.displayName) }
@@ -154,7 +157,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. Feed reminders are a normal notification at her predicted next feed. The feed alarm is a real alarm that rings through silent mode and Focus, moves itself every time a feed is logged, and its Log feed button records a bottle at the last amount.")
+                    Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. The Sunday digest is one notification with the week's feeds, diapers and sleep, and how it compares to last week. Feed reminders are a normal notification at her predicted next feed. The feed alarm is a real alarm that rings through silent mode and Focus, moves itself every time a feed is logged, and its Log feed button records a bottle at the last amount.")
                 }
 
                 if FeatureFlags.nanit {
@@ -179,6 +182,16 @@ struct SettingsView: View {
                 } footer: {
                     Text("Sleep and wake events from the camera become sleep entries, logged as “Nanit”, when the app opens and in the background every so often. Unofficial: Nanit has no public API, so this can stop working if they change things.")
                 }
+                }
+
+                Section {
+                    NavigationLink { GoalsSettingsView(baby: baby) } label: {
+                        LabeledContent("Daily goals", value: Goals.custom().isEmpty ? "From her age" : "Custom")
+                    }
+                } header: {
+                    Text("Goals")
+                } footer: {
+                    Text("Feeds, wet and dirty diapers, sleep and the longest gap between feeds, judged against the time of day. Targets follow her age unless you set your own, for instance from a pediatrician's plan.")
                 }
 
                 Section {
@@ -394,5 +407,61 @@ struct ShiftsView: View {
     private func minuteBinding(_ minute: Binding<Int>) -> Binding<Date> {
         Binding(get: { Calendar.current.date(bySettingHour: minute.wrappedValue / 60, minute: minute.wrappedValue % 60, second: 0, of: .now) ?? .now },
                 set: { minute.wrappedValue = Calendar.current.component(.hour, from: $0) * 60 + Calendar.current.component(.minute, from: $0) })
+    }
+}
+
+
+struct GoalsSettingsView: View {
+    @ObservedObject var baby: Baby
+    @State private var feeds = 0.0
+    @State private var wet = 0.0
+    @State private var dirty = 0.0
+    @State private var sleep = 0.0
+    @State private var gap = 0.0
+    @State private var useCustom = false
+
+    private var defaults: [Goal.Kind: Double] { Goals.targets(for: baby.ageDays().map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays()) }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Set my own targets", isOn: $useCustom)
+            } footer: {
+                Text("Off: targets follow her age from the guide. On: the numbers below, until you turn it off.")
+            }
+            if useCustom {
+                Section("Per day") {
+                    Stepper("Feeds: \(Int(feeds))", value: $feeds, in: 1...20)
+                    Stepper("Wet diapers: \(Int(wet))", value: $wet, in: 1...15)
+                    Stepper("Dirty diapers: \(Int(dirty))", value: $dirty, in: 0...12)
+                    Stepper("Sleep: \(VolumeUnit.trim(sleep)) h", value: $sleep, in: 8...20, step: 0.5)
+                    Stepper("Longest feed gap: \(VolumeUnit.trim(gap)) h", value: $gap, in: 2...8, step: 0.5)
+                }
+            } else {
+                Section("From her age") {
+                    ForEach([Goal.Kind.feeds, .wet, .dirty, .sleep, .feedGap], id: \.rawValue) { kind in
+                        if let v = defaults[kind] { LabeledContent(label(kind), value: kind == .sleep || kind == .feedGap ? "\(VolumeUnit.trim(v)) h" : "\(Int(v))") }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Daily goals")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            let c = Goals.custom(); useCustom = !c.isEmpty
+            feeds = c[.feeds] ?? defaults[.feeds] ?? 8; wet = c[.wet] ?? defaults[.wet] ?? 6; dirty = c[.dirty] ?? defaults[.dirty] ?? 3
+            sleep = c[.sleep] ?? defaults[.sleep] ?? 15; gap = c[.feedGap] ?? defaults[.feedGap] ?? 4
+        }
+        .onChange(of: useCustom) { _, on in save(on) }
+        .onChange(of: feeds) { _, _ in save(useCustom) }.onChange(of: wet) { _, _ in save(useCustom) }
+        .onChange(of: dirty) { _, _ in save(useCustom) }.onChange(of: sleep) { _, _ in save(useCustom) }.onChange(of: gap) { _, _ in save(useCustom) }
+    }
+
+    private func label(_ kind: Goal.Kind) -> String {
+        switch kind { case .feeds: return "Feeds"; case .wet: return "Wet diapers"; case .dirty: return "Dirty diapers"; case .sleep: return "Sleep"; case .feedGap: return "Longest feed gap" }
+    }
+
+    private func save(_ on: Bool) {
+        Goals.setCustom(on ? [.feeds: feeds, .wet: wet, .dirty: dirty, .sleep: sleep, .feedGap: gap] : [:])
     }
 }

@@ -67,6 +67,7 @@ private struct TodayContent: View {
                     header
                     statusCard
                     statsRow
+                    goalsCard
                     quickLog
                     timeline
                 }
@@ -266,6 +267,39 @@ private struct TodayContent: View {
                         .tint(MinaTheme.sleep)
                         .font(.mina(.subheadline, weight: .semibold))
                 }
+            }
+        }
+        .minaCard()
+    }
+
+    private var goals: [Goal] {
+        Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: baby.ageDays(on: now), now: now)
+    }
+
+    private var goalsCard: some View {
+        let goals = goals
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Today's goals").font(.mina(.headline))
+                Spacer()
+                Text("for \(stage?.title.lowercased() ?? "her age")").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+            }
+            ForEach(goals) { goal in
+                HStack(spacing: 12) {
+                    GoalRing(progress: goal.progress, status: goal.status, kind: goal.kind)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(goal.title).font(.mina(.subheadline, weight: .semibold))
+                        Text(goal.detail).font(.mina(.caption)).foregroundStyle(goal.status == .short ? MinaTheme.warning : MinaTheme.textMuted)
+                    }
+                    Spacer()
+                }
+            }
+            if let concern = Goals.concern(goals, ageDays: baby.ageDays(on: now)) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.bubble.fill").foregroundStyle(MinaTheme.warning)
+                    Text(concern).font(.mina(.footnote)).foregroundStyle(MinaTheme.textSecondary)
+                }
+                .padding(.top, 2)
             }
         }
         .minaCard()
@@ -560,5 +594,33 @@ private extension View {
             .padding(.vertical, 12)
             .background(MinaTheme.cardTint, in: Capsule())
             .contentShape(Capsule())
+    }
+}
+
+
+/// A small progress ring coloured by the goal's kind and status.
+struct GoalRing: View {
+    let progress: Double
+    let status: Goal.Status
+    let kind: Goal.Kind
+
+    private var color: Color {
+        if status == .short { return MinaTheme.warning }
+        switch kind {
+        case .feeds, .feedGap: return MinaTheme.bottle
+        case .wet: return MinaTheme.diaper
+        case .dirty: return MinaTheme.diaperDirty
+        case .sleep: return MinaTheme.sleep
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(color.opacity(0.18), lineWidth: 5)
+            Circle().trim(from: 0, to: progress).stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(-90))
+            if status == .done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(color) }
+        }
+        .frame(width: 34, height: 34)
+        .animation(.snappy, value: progress)
     }
 }

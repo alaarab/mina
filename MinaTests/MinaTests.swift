@@ -515,3 +515,38 @@ final class ChangelogTests: XCTestCase {
         XCTAssertTrue(sections.first!.groups.contains { $0.title == "New" && !$0.items.isEmpty })
     }
 }
+
+
+final class GoalsTests: XCTestCase {
+    func testGoalsJudgeByTimeOfDay() {
+        let cal = Calendar.current
+        let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+        let night = cal.date(bySettingHour: 22, minute: 0, second: 0, of: Date())!
+        var s = DaySummary(); s.feeds = 4; s.wet = 3; s.dirty = 1; s.sleepSeconds = 7 * 3600
+        let stage = Guidance.stage(forAgeDays: 20)   // 7–10 feeds, 6+ wet, 15–17h
+        let atNoon = Goals.evaluate(summary: s, lastFeed: noon.addingTimeInterval(-3600), stage: stage, ageDays: 20, now: noon)
+        XCTAssertEqual(atNoon.first { $0.kind == .wet }?.status, .onTrack, "3 wet by noon is fine")
+        XCTAssertEqual(atNoon.first { $0.kind == .feedGap }?.status, .onTrack)
+        let atNight = Goals.evaluate(summary: s, lastFeed: night.addingTimeInterval(-4.5 * 3600), stage: stage, ageDays: 10, now: night)
+        XCTAssertEqual(atNight.first { $0.kind == .wet }?.status, .short, "3 wet at 10 PM is short")
+        XCTAssertEqual(atNight.first { $0.kind == .feedGap }?.status, .short, "4.5h gap at 10 days old is past the wake-to-feed limit")
+        XCTAssertNotNil(Goals.concern(atNight, ageDays: 10))
+        Goals.setCustom([.wet: 2]); defer { Goals.setCustom([:]) }
+        let custom = Goals.evaluate(summary: s, lastFeed: nil, stage: stage, ageDays: 20, now: night)
+        XCTAssertEqual(custom.first { $0.kind == .wet }?.status, .done, "custom target wins")
+    }
+}
+
+final class WeeklyDigestTests: XCTestCase {
+    func testDigestTextAndComparison() {
+        var this = WeeklyDigest.Summary(); this.feeds = 52; this.bottleML = 7 * 17 * VolumeUnit.millilitersPerOunce; this.wet = 41; this.dirty = 12; this.sleepSeconds = 7 * 14.5 * 3600; this.longestSleep = 5 * 3600 + 600; this.nights = 7
+        var last = this; last.bottleML = 7 * 15 * VolumeUnit.millilitersPerOunce; last.longestSleep = 4 * 3600
+        let text = WeeklyDigest.text(this: this, last: last, unit: .ounces, babyName: "Test")
+        XCTAssertTrue(text.hasPrefix("Test this week: 52 feeds, 17 oz a day by bottle, 41 wet and 12 dirty diapers, 14h 30m of sleep a day, longest stretch 5h 10m."), text)
+        XCTAssertTrue(text.contains("up 2 oz a day"), text)
+        XCTAssertTrue(text.contains("longest stretch up 1h 10m"), text)
+        let sunday = WeeklyDigest.nextFireDate(after: Date(timeIntervalSince1970: 1_780_000_000))
+        XCTAssertEqual(Calendar.current.component(.weekday, from: sunday), 1)
+        XCTAssertEqual(Calendar.current.component(.hour, from: sunday), 19)
+    }
+}

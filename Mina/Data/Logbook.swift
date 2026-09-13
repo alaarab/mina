@@ -138,6 +138,7 @@ final class Logbook: @unchecked Sendable {
         try context.save()
         if draft.kind == .nursing, draft.endedAt != nil, let side = draft.side, side != .both { Prefs.lastNursingSide = side }
         if draft.kind.isFeed { rearmFeedAlarm(for: baby, in: context) }
+        Self.anyEntryLogged?(baby, context)
         Self.widgetsChanged()
         return entry
     }
@@ -321,6 +322,8 @@ final class Logbook: @unchecked Sendable {
     /// Installed by the app at launch: re-arms the feed alarm after a feed is
     /// logged from any phone or intent. Widgets leave it nil.
     static var feedLogged: ((Baby, NSManagedObjectContext) -> Void)?
+    /// Installed by the app: refreshes the weekly digest after any entry.
+    static var anyEntryLogged: ((Baby, NSManagedObjectContext) -> Void)?
 
     func rearmFeedAlarm(for baby: Baby, in context: NSManagedObjectContext) {
         Self.feedLogged?(baby, context)
