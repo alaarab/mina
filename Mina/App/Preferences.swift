@@ -53,6 +53,7 @@ enum Prefs {
     static let partnerAlertsKey = "partnerAlerts"
     static let deviceIDKey = "deviceID"
     static let lastNursingSideKey = "lastNursingSide"
+    static let selectedBabyKey = "selectedBaby"
 
     static let defaults: UserDefaults = {
         let group = UserDefaults(suiteName: appGroup) ?? .standard
@@ -87,6 +88,12 @@ enum Prefs {
         case .right: return .left
         default: return .left
         }
+    }
+
+    /// Which baby the app shows when there's more than one (twins, a second child).
+    static var selectedBabyID: UUID? {
+        get { defaults.string(forKey: selectedBabyKey).flatMap(UUID.init(uuidString:)) }
+        set { defaults.set(newValue?.uuidString, forKey: selectedBabyKey) }
     }
 
     static var partnerAlerts: Bool {

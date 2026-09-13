@@ -29,6 +29,9 @@ struct SettingsView: View {
     @State private var exportURL: URL?
     @State private var importing = false
     @State private var backupMessage: String?
+    @FetchRequest(fetchRequest: Baby.request(), animation: .default) private var babies: FetchedResults<Baby>
+    @AppStorage(Prefs.selectedBabyKey, store: Prefs.defaults) private var selectedBabyID = ""
+    @State private var addingBaby = false
 
     private let persistence = PersistenceController.shared
 
@@ -42,6 +45,13 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Baby") {
+                    if babies.count > 1 {
+                        Picker("Showing", selection: $selectedBabyID) {
+                            ForEach(babies) { candidate in
+                                Text(candidate.displayName + (persistence.isShared(candidate) ? " · shared" : "")).tag(candidate.id?.uuidString ?? "")
+                            }
+                        }
+                    }
                     TextField("Name", text: $name)
                         .onChange(of: name) { _, value in
                             let trimmed = value.trimmingCharacters(in: .whitespaces)
@@ -54,6 +64,7 @@ struct SettingsView: View {
                             baby.birthDate = value
                             try? context.save()
                         }
+                    Button { addingBaby = true } label: { Label("Add another baby", systemImage: "plus") }
                 }
 
                 Section {
@@ -179,6 +190,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .minaCanvas()
             .sheet(isPresented: $linkingNanit) { NanitLinkSheet() }
+            .sheet(isPresented: $addingBaby) { AddBabySheet() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
                 do {
                     guard let url = try result.get().first else { return }
@@ -216,6 +228,45 @@ struct SettingsView: View {
         HStack(spacing: 8) {
             Image(systemName: "waveform").foregroundStyle(MinaTheme.accent).font(.system(size: 12, weight: .semibold))
             Text("“\(text)”").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+        }
+    }
+}
+
+
+/// A second child (or twins): a new local log you can share separately.
+struct AddBabySheet: View {
+    @Environment(\.managedObjectContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var birthDate = Calendar.current.startOfDay(for: .now)
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                    DatePicker("Birthday", selection: $birthDate, in: ...Date.now, displayedComponents: .date)
+                } footer: {
+                    Text("Each baby has its own log and its own sharing. Switch between them under Settings → Baby.")
+                }
+            }
+            .navigationTitle("Add a baby")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        do {
+                            let baby = try Logbook.shared.createBaby(name: name.trimmingCharacters(in: .whitespaces), birthDate: birthDate, in: context)
+                            Prefs.selectedBabyID = baby.id
+                            dismiss()
+                        } catch { self.error = error.localizedDescription }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .errorAlert($error)
         }
     }
 }

@@ -66,6 +66,9 @@ struct AskView: View {
     @State private var revision = 0
     @State private var answering: Task<Void, Never>?
     @State private var chat = AskSession()
+    @StateObject private var dictation = Dictation()
+    @StateObject private var speaker = Speaker()
+    @AppStorage(Speaker.key, store: Prefs.defaults) private var speaks = false
     @FocusState private var composing: Bool
 
     private let starters = ["How is her sleep trending?", "Is she eating enough for her age?", "Anything I should mention to the pediatrician?", "What was her longest stretch this week?"]
@@ -76,6 +79,7 @@ struct AskView: View {
             VStack(spacing: 0) {
                 transcript
                 composer
+                bindVoice()
             }
             .background(MinaTheme.canvas.ignoresSafeArea())
             .navigationTitle("Ask")
@@ -179,6 +183,31 @@ struct AskView: View {
                 .disabled(messages.isEmpty && question.isEmpty)
                 .accessibilityLabel("New chat")
 
+                Button {
+                    speaks.toggle()
+                    if !speaks { speaker.stop() }
+                    else if let last = messages.last(where: { $0.role == .mina && !$0.text.isEmpty }), !streaming { speaker.speak(last.text) }
+                } label: {
+                    Image(systemName: speaks ? "speaker.wave.2.fill" : "speaker.slash")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(speaks ? MinaTheme.accent : MinaTheme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(speaks ? "Stop reading answers aloud" : "Read answers aloud")
+
+                Button { dictation.toggle() } label: {
+                    Image(systemName: dictation.listening ? "mic.fill" : "mic")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(dictation.listening ? Color.white : MinaTheme.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(dictation.listening ? MinaTheme.danger : Color.clear, in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .disabled(unavailable != nil || streaming)
+                .accessibilityLabel(dictation.listening ? "Stop dictating" : "Dictate a question")
+
                 Spacer(minLength: 4)
 
                 Button { streaming ? stop() : ask(question) } label: {
@@ -205,6 +234,16 @@ struct AskView: View {
         .padding(.top, 6)
         .padding(.bottom, 8)
         .background(MinaTheme.canvas.ignoresSafeArea(.container, edges: .bottom))
+    }
+
+    private func bindVoice() -> some View {
+        EmptyView()
+            .onChange(of: dictation.transcript) { _, text in if dictation.listening || !text.isEmpty { question = text } }
+            .onChange(of: dictation.listening) { was, now in
+                if was && !now, speaks, !question.trimmingCharacters(in: .whitespaces).isEmpty { ask(question) }
+            }
+            .onChange(of: dictation.problem) { _, problem in if let problem { messages.append(AskMessage(role: .mina, text: "", error: problem)) } }
+            .onDisappear { dictation.stop(); speaker.stop() }
     }
 
     private var sendEnabled: Bool {
@@ -250,6 +289,8 @@ struct AskView: View {
     private func ask(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !streaming, unavailable == nil else { return }
+        dictation.stop()
+        speaker.stop()
         question = ""
         composing = false
         messages.append(AskMessage(role: .you, text: trimmed))
@@ -305,7 +346,9 @@ struct AskView: View {
 
     /// Idempotent: both the stop button and the finished task call it.
     private func settle() {
+        let wasStreaming = streaming
         streaming = false
+        if wasStreaming, speaks, let last = messages.last(where: { $0.role == .mina }), !last.text.isEmpty, last.error == nil { speaker.speak(last.text) }
         for index in messages.indices where messages[index].streaming {
             messages[index].streaming = false
             if messages[index].text.isEmpty && messages[index].error == nil { messages[index].text = "Stopped." }
