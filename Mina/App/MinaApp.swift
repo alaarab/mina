@@ -57,8 +57,8 @@ struct MinaApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active: Task { await NanitSync.shared.sync() }
-            case .background: NanitSync.scheduleBackgroundRefresh()
+            case .active: if FeatureFlags.nanit { Task { await NanitSync.shared.sync() } }
+            case .background: if FeatureFlags.nanit { NanitSync.scheduleBackgroundRefresh() }
             default: break
             }
         }

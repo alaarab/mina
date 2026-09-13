@@ -44,6 +44,13 @@ enum VolumeUnit: String, CaseIterable, Identifiable {
 
 // MARK: Stored settings
 
+/// Features that exist in the code but aren't shown in this release.
+enum FeatureFlags {
+    /// The Nanit import talks to Nanit's private API. Off for App Store builds;
+    /// flip on for personal builds.
+    static let nanit = false
+}
+
 /// Settings shared between the app and its widgets through the App Group.
 enum Prefs {
     static let appGroup = Bundle.main.bundleIdentifier?.hasSuffix(".recovery") == true ? "group.com.alaarab.mina.recovery" : "group.com.alaarab.mina"

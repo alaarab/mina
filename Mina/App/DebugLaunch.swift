@@ -36,7 +36,8 @@ enum DebugLaunch {
         let clock = Date.now
         defer { NSLog("seed-demo: \(Int(Date.now.timeIntervalSince(clock) * 1000)) ms") }
         let calendar = Calendar.current
-        let now = Date.now
+        // Pin the seed's "now" to mid-afternoon so Today always shows a full day, whatever the clock says.
+        let now = calendar.date(bySettingHour: 15, minute: 10, second: 0, of: .now) ?? .now
         let today = calendar.startOfDay(for: now)
         let days = argument("-seed-days").flatMap(Int.init) ?? 12
         do {

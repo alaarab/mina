@@ -125,9 +125,9 @@ imports one back, adding only entries that aren't already there.
 - **Milestones**: in the Guide, tap a milestone when she does it; it's logged with the date
   and shows up on the timeline and in the report.
 
-## Nanit
+## Nanit (off in App Store builds)
 
-Settings → Connect Nanit: email and password, the code Nanit emails, then pick the
+Set `FeatureFlags.nanit = true` in `Mina/App/Preferences.swift` to show it. Settings → Connect Nanit: email and password, the code Nanit emails, then pick the
 camera. Only the sign-in token is kept (Keychain). Sleep and wake events from the
 camera's message feed become sleep entries logged as "Nanit", synced when the app
 comes to the foreground and by background app refresh roughly every 30 minutes.
