@@ -59,8 +59,13 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
 
 struct HistoryView: View {
     @ObservedObject var baby: Baby
-    @State private var filter: HistoryFilter = DebugLaunch.argument("-history-filter").flatMap(HistoryFilter.init(rawValue:)) ?? .all
+    @State private var filter: HistoryFilter
     @State private var query = DebugLaunch.argument("-history-query") ?? ""
+
+    init(baby: Baby, filter: HistoryFilter = .all) {
+        _baby = ObservedObject(wrappedValue: baby)
+        _filter = State(initialValue: DebugLaunch.argument("-history-filter").flatMap(HistoryFilter.init(rawValue:)) ?? filter)
+    }
 
     var body: some View {
         VStack(spacing: 0) {

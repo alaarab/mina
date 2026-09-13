@@ -122,7 +122,7 @@ private struct TodayContent: View {
                     if let lastFeed, let at = lastFeed.startedAt {
                         Text("Fed \(Format.ago(from: at, to: now))")
                             .font(.mina(.headline))
-                        Text("\(lastFeed.title(unit: unit, now: now)) at \(Format.time(at))")
+                        Text("\(lastFeed.title(unit: unit, now: now)) at \(Format.time(at)) · tap to edit")
                             .font(.mina(.subheadline))
                             .foregroundStyle(MinaTheme.textSecondary)
                     } else {
@@ -135,6 +135,8 @@ private struct TodayContent: View {
                 }
                 Spacer(minLength: 0)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { if let lastFeed { editing = lastFeed } }
             if let nursing, let since = nursing.startedAt {
                 Divider()
                 HStack(spacing: 12) {
@@ -221,16 +223,23 @@ private struct TodayContent: View {
     private var statsRow: some View {
         let summary = summary
         return HStack(spacing: 10) {
-            StatTile(title: "Feeds", value: "\(summary.feeds)", color: MinaTheme.bottle,
-                     detail: feedDetail(summary),
-                     expect: stage.map { "expect \($0.expectation.feedsText())" })
-            StatTile(title: "Diapers", value: "\(summary.diapers)", color: MinaTheme.diaper,
-                     detail: "\(summary.wet) wet · \(summary.dirty) dirty",
-                     expect: stage.map { "expect \($0.expectation.wetText())" })
-            StatTile(title: "Sleep", value: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "0m", color: MinaTheme.sleep,
-                     detail: Format.count(summary.sleeps, "stretch", "stretches"),
-                     expect: stage.map { "expect \($0.expectation.sleepText())" })
+            NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
+                StatTile(title: "Feeds", value: "\(summary.feeds)", color: MinaTheme.bottle,
+                         detail: feedDetail(summary),
+                         expect: stage.map { "expect \($0.expectation.feedsText())" })
+            }
+            NavigationLink { HistoryView(baby: baby, filter: .diapers) } label: {
+                StatTile(title: "Diapers", value: "\(summary.diapers)", color: MinaTheme.diaper,
+                         detail: "\(summary.wet) wet · \(summary.dirty) dirty",
+                         expect: stage.map { "expect \($0.expectation.wetText())" })
+            }
+            NavigationLink { HistoryView(baby: baby, filter: .sleep) } label: {
+                StatTile(title: "Sleep", value: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "0m", color: MinaTheme.sleep,
+                         detail: Format.count(summary.sleeps, "stretch", "stretches"),
+                         expect: stage.map { "expect \($0.expectation.sleepText())" })
+            }
         }
+        .buttonStyle(.plain)
     }
 
     private var quickLog: some View {

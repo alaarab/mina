@@ -103,10 +103,17 @@ struct TrendsView: View {
         return VStack(alignment: .leading, spacing: 10) {
             Text("Last 7 days, per day").font(.mina(.headline))
             HStack(spacing: 10) {
-                StatTile(title: "Feeds", value: String(format: "%.1f", feeds), color: MinaTheme.bottle, detail: ml > 0 ? "\(unit.format(ml: ml)) by bottle" : "no bottles", expect: nil)
-                StatTile(title: "Diapers", value: String(format: "%.1f", wet + dirty), color: MinaTheme.diaper, detail: String(format: "%.1f wet · %.1f dirty", wet, dirty), expect: nil)
-                StatTile(title: "Sleep", value: Format.duration(sleep), color: MinaTheme.sleep, detail: "longest \(Format.duration(longest))", expect: nil)
+                NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
+                    StatTile(title: "Feeds", value: String(format: "%.1f", feeds), color: MinaTheme.bottle, detail: ml > 0 ? "\(unit.format(ml: ml)) by bottle" : "no bottles", expect: nil)
+                }
+                NavigationLink { HistoryView(baby: baby, filter: .diapers) } label: {
+                    StatTile(title: "Diapers", value: String(format: "%.1f", wet + dirty), color: MinaTheme.diaper, detail: String(format: "%.1f wet · %.1f dirty", wet, dirty), expect: nil)
+                }
+                NavigationLink { HistoryView(baby: baby, filter: .sleep) } label: {
+                    StatTile(title: "Sleep", value: Format.duration(sleep), color: MinaTheme.sleep, detail: "longest \(Format.duration(longest))", expect: nil)
+                }
             }
+            .buttonStyle(.plain)
         }
     }
 
