@@ -80,11 +80,36 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(preparingShare || persistence.isShared(baby))
+                    let people = sharing.participants(for: baby)
+                    ForEach(people) { person in
+                        HStack {
+                            Text(person.isOwner ? "\(person.name) (owner)" : person.name)
+                            Spacer()
+                            Text(person.isOwner ? "" : person.canWrite ? (person.accepted ? "can make changes" : "invited") : "view only")
+                                .foregroundStyle(person.canWrite || person.isOwner ? MinaTheme.textMuted : MinaTheme.danger)
+                        }
+                        .font(.mina(.subheadline))
+                    }
+                    if people.contains(where: { !$0.isOwner && !$0.canWrite }) {
+                        Button {
+                            Task { await sharing.grantWriteToEveryone(for: baby) }
+                        } label: {
+                            Label("Let everyone on the share make changes", systemImage: "pencil")
+                        }
+                    }
                     LabeledContent("iCloud", value: sync.statusText)
                         .font(.mina(.subheadline))
-                    Text(sync.stepsText)
+                    Text(sync.stepsText.isEmpty ? "No sync activity yet" : sync.stepsText)
                         .font(.mina(.caption2))
                         .foregroundStyle(MinaTheme.textMuted)
+                    ForEach(sync.details.keys.sorted(), id: \.self) { key in
+                        if let detail = sync.details[key] {
+                            DisclosureGroup("\(key) error") {
+                                Text(detail).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+                            }
+                            .font(.mina(.caption)).foregroundStyle(MinaTheme.danger)
+                        }
+                    }
                 } header: {
                     Text("Sharing")
                 } footer: {

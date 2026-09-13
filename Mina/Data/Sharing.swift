@@ -85,6 +85,42 @@ final class ShareManager: ObservableObject {
         }
     }
 
+    struct Participant: Identifiable {
+        let id: String
+        let name: String
+        let isOwner: Bool
+        let canWrite: Bool
+        let accepted: Bool
+    }
+
+    /// Everyone on the share, with what they can do. Owner first.
+    func participants(for baby: Baby) -> [Participant] {
+        guard let share = existingShare(for: baby) else { return [] }
+        let formatter = PersonNameComponentsFormatter()
+        formatter.style = .short
+        return share.participants.map { participant in
+            let identity = participant.userIdentity
+            let name = identity.nameComponents.map { formatter.string(from: $0) }
+                ?? identity.lookupInfo?.emailAddress ?? identity.lookupInfo?.phoneNumber ?? "Invited person"
+            return Participant(id: identity.userRecordID?.recordName ?? name, name: name.isEmpty ? "Invited person" : name,
+                               isOwner: participant.role == .owner, canWrite: participant.permission == .readWrite,
+                               accepted: participant.acceptanceStatus == .accepted)
+        }.sorted { $0.isOwner && !$1.isOwner }
+    }
+
+    /// Gives every invited person edit access and saves the share to iCloud.
+    func grantWriteToEveryone(for baby: Baby) async {
+        guard let share = existingShare(for: baby) else { error = "There's no share on this log yet."; return }
+        for participant in share.participants where participant.role != .owner { participant.permission = .readWrite }
+        do {
+            let database = cloudContainer.privateCloudDatabase
+            _ = try await database.modifyRecords(saving: [share], deleting: [], savePolicy: .changedKeys)
+            objectWillChange.send()
+        } catch {
+            self.error = "Couldn't update the share: \(error.localizedDescription)"
+        }
+    }
+
     /// "Shared with Sam" or "Not shared yet".
     ///
     /// The email or phone fallback shows the address the owner typed into the
@@ -162,30 +198,47 @@ final class SyncMonitor: ObservableObject {
         Task { await refreshAccount() }
     }
 
+    /// The most recent error text per step, including CloudKit's per-record detail.
+    @Published var details: [String: String] = [:]
+
     private func handle(_ event: NSPersistentCloudKitContainer.Event) {
-        let name: String
+        let step: String
         switch event.type {
-        case .setup: name = "Setup"
-        case .import: name = "Import"
-        case .export: name = "Export"
-        @unknown default: name = "Other"
+        case .setup: step = "Setup"
+        case .import: step = "Import"
+        case .export: step = "Export"
+        @unknown default: step = "Other"
         }
+        // The private store holds a log you created; the shared store one your partner shared.
+        let persistence = PersistenceController.shared
+        let store = event.storeIdentifier == persistence.sharedStore?.identifier ? "Shared log" : "Your log"
+        let name = "\(store) \(step)"
         guard let endDate = event.endDate else {
             steps[name] = "running…"
             return
         }
         if let error = event.error {
-            lastError = "\(name): \(error.localizedDescription)"
-            steps[name] = "failed: \((error as NSError).code) \(error.localizedDescription)"
+            let nsError = error as NSError
+            var lines = ["\(nsError.domain) \(nsError.code): \(nsError.localizedDescription)"]
+            if let partial = nsError.userInfo[NSDetailedErrorsKey] as? [NSError] { lines += partial.prefix(5).map { "\($0.code): \($0.localizedDescription)" } }
+            if let partial = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: NSError] { lines += partial.values.prefix(5).map { "\($0.code): \($0.localizedDescription)" } }
+            lastError = "\(name): \(nsError.localizedDescription)"
+            steps[name] = "failed \(Format.time(endDate))"
+            details[name] = lines.joined(separator: "\n")
         } else {
-            lastError = nil
+            if lastError?.hasPrefix(name) == true { lastError = nil }
             lastSuccess = endDate
             steps[name] = "ok \(Format.time(endDate))"
+            details[name] = nil
         }
     }
 
+    /// One line per store, only for stores that have reported anything.
     var stepsText: String {
-        ["Setup", "Export", "Import"].map { "\($0) \(steps[$0] ?? "not run yet")" }.joined(separator: " · ")
+        ["Your log", "Shared log"].compactMap { store -> String? in
+            let parts = ["Setup", "Export", "Import"].compactMap { step in steps["\(store) \(step)"].map { "\(step) \($0)" } }
+            return parts.isEmpty ? nil : "\(store): " + parts.joined(separator: " · ")
+        }.joined(separator: "\n")
     }
 
     func refreshAccount() async {
