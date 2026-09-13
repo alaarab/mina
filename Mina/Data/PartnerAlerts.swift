@@ -84,8 +84,11 @@ final class PartnerAlerts {
             guard !entries.isEmpty else { return }
             let messages = entries.map { Self.message(for: $0, unit: Prefs.unit) }
             DispatchQueue.main.async {
-                guard UIApplication.shared.applicationState != .active else { return }
-                for message in messages { Self.post(message) }
+                // Genuinely on the main queue, so read UIApplication there.
+                MainActor.assumeIsolated {
+                    guard UIApplication.shared.applicationState != .active else { return }
+                    for message in messages { Self.post(message) }
+                }
             }
         }
     }
@@ -95,6 +98,20 @@ final class PartnerAlerts {
     struct Message: Equatable {
         let title: String
         let body: String
+        /// How high this sits in a notification summary. A feed or a sleep is
+        /// what the other parent is waiting on; a note can wait.
+        var relevance: Double = 0.6
+    }
+
+    /// Notification text is visible on a locked screen, so free text never goes
+    /// out whole: a long note is cut to a sentence's worth, and nothing else in
+    /// a message is user-typed beyond a name.
+    static let bodyLimit = 120
+
+    static func clip(_ text: String, to limit: Int = bodyLimit) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        return trimmed.prefix(limit - 1).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     static func message(for entry: LogEntry, unit: VolumeUnit, now: Date = .now) -> Message {
@@ -103,12 +120,12 @@ final class PartnerAlerts {
         let at = Format.time(entry.startedAt ?? now)
         switch entry.kind {
         case .bottle:
-            return Message(title: "\(who) fed \(baby)", body: "\(unit.format(ml: entry.amountML)) bottle at \(at)")
+            return Message(title: "\(who) fed \(baby)", body: "\(unit.format(ml: entry.amountML)) bottle at \(at)", relevance: 0.9)
         case .nursing:
             var body = "Nursed"
             if let side = entry.side { body += " on the \(side.title.lowercased())" }
             if let seconds = entry.duration(now: now), seconds > 0 { body += " for \(Format.duration(seconds))" }
-            return Message(title: "\(who) fed \(baby)", body: body + " at \(at)")
+            return Message(title: "\(who) fed \(baby)", body: body + " at \(at)", relevance: 0.9)
         case .diaper:
             return Message(title: "\(who) changed \(baby)", body: "\(entry.diaper?.title ?? "Wet") diaper at \(at)")
         case .sleep:
@@ -117,20 +134,25 @@ final class PartnerAlerts {
             }
             return Message(title: "\(baby) slept \(Format.duration(entry.duration(now: now) ?? 0))", body: "Logged by \(who.lowercased() == "your partner" ? "your partner" : who)")
         case .note:
-            return Message(title: "\(who) added a note", body: entry.note ?? "")
+            return Message(title: "\(who) added a note", body: clip(entry.note ?? ""), relevance: 0.3)
         case .milestone:
-            return Message(title: "\(baby) hit a milestone", body: "\(entry.label ?? "") · noted by \(who)")
+            return Message(title: "\(baby) hit a milestone", body: clip("\(entry.label ?? "") · noted by \(who)"), relevance: 0.4)
         case .pumping, .growth, .medicine, .tummyTime, .bath, .temperature:
-            return Message(title: "\(who) logged \(entry.kind.title.lowercased())", body: "\(entry.title(unit: unit, now: now)) at \(at)")
+            return Message(title: "\(who) logged \(entry.kind.title.lowercased())",
+                           body: clip("\(entry.title(unit: unit, now: now)) at \(at)"), relevance: 0.5)
         }
     }
 
     private static func post(_ message: Message) {
         let content = UNMutableNotificationContent()
         content.title = message.title
-        content.body = message.body
+        content.body = clip(message.body)
         content.sound = .default
         content.threadIdentifier = "partner"
+        // A partner's entry is news, not an emergency: it must never break
+        // through a Focus or a silenced phone the way .timeSensitive would.
+        content.interruptionLevel = .active
+        content.relevanceScore = message.relevance
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }

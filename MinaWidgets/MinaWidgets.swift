@@ -51,6 +51,9 @@ struct MinaEntry: TimelineEntry {
 }
 
 struct MinaProvider: TimelineProvider {
+    /// Stand-in numbers only. The widget gallery, the placeholder that shows
+    /// while a timeline loads, and any snapshot the system takes for a preview
+    /// all come through here, and none of them may show a real entry.
     func placeholder(in context: Context) -> MinaEntry {
         var snapshot = MinaSnapshot()
         snapshot.hasBaby = true
@@ -226,6 +229,9 @@ struct MinaStatusWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MinaStatus", provider: MinaProvider()) { entry in
             StatusWidgetView(entry: entry)
+                // Lock-screen and StandBy families render before the phone is
+                // unlocked; redact the feed and sleep data there.
+                .privacySensitive()
                 .containerBackground(MinaTheme.card, for: .widget)
         }
         .configurationDisplayName("Last feed")
@@ -238,6 +244,7 @@ struct MinaQuickLogWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MinaQuickLog", provider: MinaProvider()) { entry in
             QuickLogWidgetView(entry: entry)
+                .privacySensitive()
                 .containerBackground(MinaTheme.card, for: .widget)
         }
         .configurationDisplayName("Quick log")

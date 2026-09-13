@@ -2,12 +2,24 @@ import CoreData
 import XCTest
 @testable import Mina
 
+/// One class per thing that can quietly go wrong: the pure value work
+/// (formatting, guidance ranges, predictions, grouping) tested directly, and
+/// the Core Data paths tested against an in-memory store.
+
 final class UnitTests: XCTestCase {
     func testOunceFormatting() {
         XCTAssertEqual(VolumeUnit.ounces.format(ml: 4 * VolumeUnit.millilitersPerOunce), "4 oz")
         XCTAssertEqual(VolumeUnit.ounces.format(ml: 4.5 * VolumeUnit.millilitersPerOunce), "4.5 oz")
         XCTAssertEqual(VolumeUnit.ounces.format(ml: 4.3 * VolumeUnit.millilitersPerOunce), "4.25 oz")
         XCTAssertEqual(VolumeUnit.milliliters.format(ml: 118.3), "118 ml")
+    }
+
+    func testCountPluralises() {
+        XCTAssertEqual(Format.count(1, "feed"), "1 feed")
+        XCTAssertEqual(Format.count(0, "feed"), "0 feeds")
+        XCTAssertEqual(Format.count(2, "diaper"), "2 diapers")
+        XCTAssertEqual(Format.count(1, "stretch", "stretches"), "1 stretch")
+        XCTAssertEqual(Format.count(3, "stretch", "stretches"), "3 stretches")
     }
 
     func testFeedAmountConversions() {
@@ -290,5 +302,103 @@ final class AskContextTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_780_000_000)
         XCTAssertEqual(RelativeDay.today.date(now: now), now)
         XCTAssertEqual(RelativeDay.yesterday.date(now: now), Calendar.current.date(byAdding: .day, value: -1, to: now))
+    }
+}
+
+
+final class NursingTimerTests: XCTestCase {
+    func testTimerSwitchesSidesAndSummarizes() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let start = Date(timeIntervalSince1970: 1_780_000_000)
+
+        let entry = try logbook.startNursing(side: .left, for: baby, at: start, in: context)
+        XCTAssertTrue(entry.isOngoingNursing)
+        XCTAssertEqual(entry.duration(now: start.addingTimeInterval(300)), 300, "an open nursing counts up to now")
+        XCTAssertEqual(try logbook.startNursing(side: .right, for: baby, at: start, in: context), entry, "only one timer at a time")
+
+        try logbook.switchNursingSide(entry, at: start.addingTimeInterval(480), in: context)
+        XCTAssertEqual(entry.side, .both)
+        try logbook.endNursing(entry, at: start.addingTimeInterval(840), in: context)
+        XCTAssertEqual(entry.label, "left 8m · right 6m")
+        XCTAssertEqual(Prefs.lastNursingSide, .right)
+        XCTAssertEqual(Prefs.suggestedNursingSide, .left)
+        XCTAssertNil(logbook.ongoingNursing(for: baby, in: context))
+
+        let summary = DaySummary(entries: [entry], day: start, now: start.addingTimeInterval(3600))
+        XCTAssertEqual(summary.feeds, 1)
+        XCTAssertEqual(summary.nursingSeconds, 840)
+    }
+}
+
+
+final class DayGroupingTests: XCTestCase {
+    private var persistence: PersistenceController!
+    private var logbook: Logbook!
+    private var context: NSManagedObjectContext!
+    private var baby: Baby!
+    private let calendar = Calendar.current
+    private var day: Date { calendar.startOfDay(for: Date(timeIntervalSince1970: 1_780_000_000)) }
+    private var yesterday: Date { calendar.date(byAdding: .day, value: -1, to: day)! }
+
+    override func setUpWithError() throws {
+        persistence = PersistenceController(inMemory: true)
+        logbook = Logbook(persistence: persistence)
+        context = persistence.container.viewContext
+        baby = try logbook.createBaby(name: "Test", birthDate: day, in: context)
+    }
+
+    private func entry(_ kind: EntryKind, at date: Date) throws -> LogEntry {
+        try logbook.add(EntryDraft(kind: kind, startedAt: date), to: baby, in: context)
+    }
+
+    /// Entries arrive newest first, the way every fetch in the app sorts them.
+    private func fetchOrder() throws -> [LogEntry] {
+        let morning = try entry(.bottle, at: day.addingTimeInterval(9 * 3600))
+        let dawn = try entry(.diaper, at: day.addingTimeInterval(2 * 3600))
+        let lastNight = try entry(.sleep, at: day.addingTimeInterval(-5 * 3600))
+        return [morning, dawn, lastNight]
+    }
+
+    func testByDayBucketsOnTheStartOfTheDay() throws {
+        let entries = try fetchOrder()
+        let byDay = DayGrouping.byDay(entries, calendar: calendar)
+        XCTAssertEqual(byDay.count, 2)
+        XCTAssertEqual(byDay[day]?.count, 2)
+        XCTAssertEqual(byDay[yesterday]?.count, 1)
+        XCTAssertNil(byDay[calendar.date(byAdding: .day, value: 1, to: day)!])
+    }
+
+    func testDaysComeBackNewestFirstAndKeepTheirOrder() throws {
+        let entries = try fetchOrder()
+        let days = DayGrouping.days(entries, calendar: calendar)
+        XCTAssertEqual(days.map(\.day), [day, yesterday])
+        XCTAssertEqual(days[0].entries, [entries[0], entries[1]], "entries keep the order they arrived in")
+        XCTAssertEqual(days[1].entries, [entries[2]])
+    }
+
+    func testDayRunsAreIndexRangesIntoTheCollection() throws {
+        let entries = try fetchOrder()
+        let runs = DayGrouping.dayRuns(entries, calendar: calendar)
+        XCTAssertEqual(runs.map(\.day), [day, yesterday])
+        XCTAssertEqual(runs[0].range, 0..<2)
+        XCTAssertEqual(runs[1].range, 2..<3)
+        XCTAssertEqual(runs.reduce(0) { $0 + $1.range.count }, entries.count, "every entry lands in exactly one run")
+    }
+
+    func testNothingToGroup() {
+        XCTAssertTrue(DayGrouping.byDay([LogEntry](), calendar: calendar).isEmpty)
+        XCTAssertTrue(DayGrouping.days([LogEntry](), calendar: calendar).isEmpty)
+        XCTAssertTrue(DayGrouping.dayRuns([LogEntry](), calendar: calendar).isEmpty)
+    }
+
+    func testAnEntryWithNoStartFallsIntoTheMissingDay() throws {
+        let orphan = try entry(.note, at: day)
+        orphan.startedAt = nil
+        XCTAssertEqual(DayGrouping.days([orphan], missing: day, calendar: calendar).first?.day, day)
+        XCTAssertEqual(DayGrouping.days([orphan], calendar: calendar).first?.day,
+                       calendar.startOfDay(for: .distantPast), "the default puts it at the far end of the list")
     }
 }

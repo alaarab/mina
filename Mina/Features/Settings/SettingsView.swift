@@ -3,6 +3,11 @@ import CloudKit
 import SwiftUI
 import UserNotifications
 
+/// Everything with a switch on it: her name and birthday, the iCloud share with
+/// the partner, notifications, the Nanit link, your own name, units, and the
+/// Siri phrases. Each section writes straight through to the store or to
+/// `Prefs`, so there is no Save button anywhere on this screen.
+
 struct SettingsView: View {
     @ObservedObject var baby: Baby
 
@@ -155,21 +160,21 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .scrollContentBackground(.hidden)
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .sheet(isPresented: $linkingNanit) { NanitLinkSheet() }
             .sheet(item: $sharing.item) { item in
                 CloudSharingView(share: item.share, container: sharing.cloudContainer, title: "\(baby.displayName)'s log")
                     .ignoresSafeArea()
             }
-            .alert("Sharing problem", isPresented: Binding(get: { sharing.error != nil }, set: { if !$0 { sharing.error = nil } })) {
-                Button("OK") {}
-            } message: { Text(sharing.error ?? "") }
+            .errorAlert($sharing.error, title: "Sharing problem")
             .task {
                 await sync.refreshAccount()
                 notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
             }
         }
     }
+
+    // MARK: Subviews
 
     private func siriPhrase(_ text: String) -> some View {
         HStack(spacing: 8) {

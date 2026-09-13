@@ -2,6 +2,12 @@ import Charts
 import CoreData
 import SwiftUI
 
+/// Fourteen days of charts, a seven-day average, the growth entries, and the
+/// one-page PDF those all fold into for the pediatrician. `TrendMath` turns the
+/// fetched entries into a row per day; everything below it just draws.
+
+// MARK: Day rows
+
 /// One row per day for the charts and the report.
 struct DayStat: Identifiable {
     let day: Date
@@ -30,14 +36,15 @@ enum TrendMath {
     }
 }
 
+// MARK: Screen
+
 struct TrendsView: View {
     @ObservedObject var baby: Baby
-    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @StoredVolumeUnit private var unit
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var reportURL: URL?
     @State private var asking = false
 
-    private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
     private static let days = 14
 
     init(baby: Baby) {
@@ -61,7 +68,7 @@ struct TrendsView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Trends")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -83,6 +90,8 @@ struct TrendsView: View {
             }
         }
     }
+
+    // MARK: Subviews
 
     private func weekSummary(_ week: [DayStat]) -> some View {
         let feeds = TrendMath.average(week.map { Double($0.summary.feeds) })
@@ -179,6 +188,8 @@ struct TrendsView: View {
         }
     }
 }
+
+// MARK: Report
 
 /// A one-page PDF for the pediatrician, rendered from a SwiftUI view.
 enum Report {

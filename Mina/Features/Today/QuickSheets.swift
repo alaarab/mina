@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// The sheets behind the Today buttons: a bottle, a nursing session or timer, a
+/// note, and the editor that any logged entry opens into. Each one builds an
+/// `EntryDraft` and hands it back, so nothing here writes to the store itself.
+
+// MARK: Which sheet
+
 enum QuickSheet: Identifiable {
     case bottle, nursing, note
     case extra(EntryKind)
@@ -12,6 +18,8 @@ enum QuickSheet: Identifiable {
         }
     }
 }
+
+// MARK: Bottle
 
 struct BottleSheet: View {
     let unit: VolumeUnit
@@ -73,7 +81,7 @@ struct BottleSheet: View {
                 .controlSize(.large)
             }
             .padding(20)
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Bottle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -90,11 +98,15 @@ struct BottleSheet: View {
     }
 }
 
+// MARK: Nursing
+
 struct NursingSheet: View {
+    let onStart: (NursingSide) -> Void
     let onSave: (EntryDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var side: NursingSide = .left
+    @State private var manual = false
+    @State private var side: NursingSide = Prefs.suggestedNursingSide
     @State private var minutes = 15
     @State private var when = Date.now
     @State private var note = ""
@@ -102,53 +114,100 @@ struct NursingSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Picker("Side", selection: $side) {
-                    ForEach(NursingSide.allCases) { Text($0.title).tag($0) }
+                Picker("Mode", selection: $manual) {
+                    Text("Start timer").tag(false)
+                    Text("Already done").tag(true)
                 }
                 .pickerStyle(.segmented)
 
-                HStack(spacing: 28) {
-                    StepButton(symbol: "minus") { minutes = max(1, minutes - 1) }
-                    VStack(spacing: 0) {
-                        Text("\(minutes)")
-                            .font(.system(size: 72, weight: .bold, design: .rounded))
-                            .foregroundStyle(MinaTheme.text)
-                            .contentTransition(.numericText())
-                            .animation(.snappy, value: minutes)
-                        Text("minutes").font(.mina(.title3, weight: .medium)).foregroundStyle(MinaTheme.textMuted)
+                if manual {
+                    Picker("Side", selection: $side) {
+                        ForEach(NursingSide.allCases) { Text($0.title).tag($0) }
                     }
-                    .frame(minWidth: 130)
-                    StepButton(symbol: "plus") { minutes = min(120, minutes + 1) }
-                }
+                    .pickerStyle(.segmented)
 
-                HStack(spacing: 8) {
-                    ForEach([5, 10, 15, 20, 30], id: \.self) { pick in
-                        Button("\(pick)") { minutes = pick }
-                            .buttonStyle(.bordered)
-                            .tint(minutes == pick ? MinaTheme.nursing : MinaTheme.textMuted)
-                            .font(.mina(.body, weight: .semibold))
+                    HStack(spacing: 28) {
+                        StepButton(symbol: "minus") { minutes = max(1, minutes - 1) }
+                        VStack(spacing: 0) {
+                            Text("\(minutes)")
+                                .font(.system(size: 72, weight: .bold, design: .rounded))
+                                .foregroundStyle(MinaTheme.text)
+                                .contentTransition(.numericText())
+                                .animation(.snappy, value: minutes)
+                            Text("minutes").font(.mina(.title3, weight: .medium)).foregroundStyle(MinaTheme.textMuted)
+                        }
+                        .frame(minWidth: 130)
+                        StepButton(symbol: "plus") { minutes = min(120, minutes + 1) }
                     }
-                }
 
-                VStack(spacing: 12) {
-                    DatePicker("Started", selection: $when, in: ...Date.now.addingTimeInterval(60), displayedComponents: [.date, .hourAndMinute])
-                        .font(.mina(.body))
-                    Divider()
-                    TextField("Note (optional)", text: $note).font(.mina(.body))
-                }
-                .minaCard()
+                    HStack(spacing: 8) {
+                        ForEach([5, 10, 15, 20, 30], id: \.self) { pick in
+                            Button("\(pick)") { minutes = pick }
+                                .buttonStyle(.bordered)
+                                .tint(minutes == pick ? MinaTheme.nursing : MinaTheme.textMuted)
+                                .font(.mina(.body, weight: .semibold))
+                        }
+                    }
 
-                Spacer()
+                    VStack(spacing: 12) {
+                        DatePicker("Started", selection: $when, in: ...Date.now.addingTimeInterval(60), displayedComponents: [.date, .hourAndMinute])
+                            .font(.mina(.body))
+                        Divider()
+                        TextField("Note (optional)", text: $note).font(.mina(.body))
+                    }
+                    .minaCard()
 
-                Button { save() } label: {
-                    Text("Save nursing").font(.mina(.headline)).frame(maxWidth: .infinity)
+                    Spacer()
+
+                    Button { save() } label: {
+                        Text("Save nursing").font(.mina(.headline)).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(MinaTheme.nursing)
+                    .controlSize(.large)
+                } else {
+                    VStack(spacing: 6) {
+                        Text("Which side is she starting on?")
+                            .font(.mina(.title3, weight: .semibold))
+                        if let last = Prefs.lastNursingSide {
+                            Text("She finished on the \(last.title.lowercased()) last time.")
+                                .font(.mina(.subheadline)).foregroundStyle(MinaTheme.textMuted)
+                        }
+                    }
+                    .padding(.top, 8)
+
+                    HStack(spacing: 14) {
+                        ForEach([NursingSide.left, .right]) { candidate in
+                            Button {
+                                onStart(candidate)
+                                dismiss()
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(systemName: candidate == .left ? "arrow.left.circle.fill" : "arrow.right.circle.fill")
+                                        .font(.system(size: 34))
+                                    Text(candidate.title).font(.mina(.headline))
+                                    if candidate == Prefs.suggestedNursingSide {
+                                        Text("suggested").font(.mina(.caption2, weight: .semibold))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 26)
+                                .background(candidate == Prefs.suggestedNursingSide ? MinaTheme.nursing : MinaTheme.card,
+                                            in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(MinaTheme.border, lineWidth: 1))
+                                .foregroundStyle(candidate == Prefs.suggestedNursingSide ? .white : MinaTheme.text)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text("The timer keeps running if you leave the app. Switch sides or stop from the Today screen.")
+                        .font(.mina(.footnote)).foregroundStyle(MinaTheme.textMuted).multilineTextAlignment(.center)
+                    Spacer()
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MinaTheme.nursing)
-                .controlSize(.large)
             }
             .padding(20)
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Nursing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -164,6 +223,8 @@ struct NursingSheet: View {
         dismiss()
     }
 }
+
+// MARK: Note
 
 struct NoteSheet: View {
     let onSave: (EntryDraft) -> Void
@@ -197,13 +258,15 @@ struct NoteSheet: View {
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(20)
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Note")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
 }
+
+// MARK: Pieces
 
 /// The big number in the bottle sheet: type it on the number pad, or use the
 /// buttons either side to nudge it.
@@ -252,13 +315,15 @@ struct StepButton: View {
     }
 }
 
+// MARK: Editor
+
 /// Edits any entry. Works on a local draft so Cancel really cancels.
 struct EntryEditor: View {
     @ObservedObject var entry: LogEntry
 
     @Environment(\.managedObjectContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @StoredVolumeUnit private var unit
     @State private var draft: EntryDraft
     @State private var amountDisplay: Double
     @State private var minutes: Int
@@ -266,8 +331,6 @@ struct EntryEditor: View {
     @State private var endedAt: Date
     @State private var confirmDelete = false
     @State private var error: String?
-
-    private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
 
     init(entry: LogEntry) {
         _entry = ObservedObject(wrappedValue: entry)
@@ -377,11 +440,11 @@ struct EntryEditor: View {
                     do { try Logbook.shared.delete(entry, in: context); dismiss() } catch { self.error = error.localizedDescription }
                 }
             }
-            .alert("Couldn't save", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("OK") {}
-            } message: { Text(error ?? "") }
+            .errorAlert($error)
         }
     }
+
+    // MARK: Actions
 
     private func save() {
         var final = draft

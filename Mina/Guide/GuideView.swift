@@ -1,10 +1,16 @@
 import CoreData
 import SwiftUI
 
+/// What to expect at her age, and her baby book. It opens on the stage she is
+/// in now but lets you read ahead or back; the milestones in each stage are
+/// checkboxes, and ticking one logs it with today's date.
+
+// MARK: Screen
+
 struct GuideView: View {
     @ObservedObject var baby: Baby
     @Environment(\.managedObjectContext) private var context
-    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @StoredVolumeUnit private var unit
     @State private var selectedStageID: String?
     @FetchRequest private var milestones: FetchedResults<LogEntry>
 
@@ -15,7 +21,6 @@ struct GuideView: View {
         _milestones = FetchRequest(fetchRequest: request, animation: .default)
     }
 
-    private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
     private var currentStage: GuideStage {
         baby.ageDays().map(Guidance.stage(forAgeDays:)) ?? Guidance.stages[0]
     }
@@ -46,10 +51,12 @@ struct GuideView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Guide")
         }
     }
+
+    // MARK: Subviews
 
     /// Each milestone is a checkbox; ticking it logs the date, so the guide doubles as her baby book.
     private var milestoneSection: some View {
@@ -153,6 +160,8 @@ struct GuideView: View {
         .minaCard()
     }
 }
+
+// MARK: Pieces
 
 private struct ExpectChip: View {
     let label: String

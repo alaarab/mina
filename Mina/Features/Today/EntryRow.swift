@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// One logged thing as a row, and the card of rows that Today and Calendar both
+/// build a day out of. The row shows only what an entry already knows how to
+/// say about itself, so a bottle reads the same wherever it appears.
+
 struct EntryRow: View {
     @ObservedObject var entry: LogEntry
     let unit: VolumeUnit

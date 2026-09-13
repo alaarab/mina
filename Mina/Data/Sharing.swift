@@ -73,7 +73,11 @@ final class ShareManager: ObservableObject {
         }
     }
 
+    /// Called straight from the scene and app delegates, which are nonisolated,
+    /// so this reads the persistence controller from its own static rather than
+    /// through the main-actor-isolated `persistence` property.
     nonisolated func accept(_ metadata: CKShare.Metadata) {
+        let persistence = PersistenceController.shared
         guard let store = persistence.sharedStore else { return }
         persistence.container.acceptShareInvitations(from: [metadata], into: store) { _, error in
             guard let error else { return }
@@ -82,6 +86,12 @@ final class ShareManager: ObservableObject {
     }
 
     /// "Shared with Sam" or "Not shared yet".
+    ///
+    /// The email or phone fallback shows the address the owner typed into the
+    /// share sheet themselves, back to that same owner, and only when iCloud has
+    /// no name for the participant yet. It is not shown to the invitee, and it
+    /// reveals nothing the person reading it did not already provide. Deliberate,
+    /// and written down in docs/SECURITY.md.
     func describe(_ share: CKShare?, baby: Baby) -> String {
         guard let share else { return "Not shared yet" }
         let formatter = PersonNameComponentsFormatter()

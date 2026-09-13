@@ -1,6 +1,14 @@
 import CoreData
 import SwiftUI
 
+/// The whole data model: the two managed object classes, the enums that give
+/// their raw string columns meaning, the Core Data model built in code, and the
+/// read-only conveniences every screen leans on to turn an entry into a title,
+/// a colour and a duration. Compiled into the widget extension as well, so it
+/// pulls in nothing the app alone has.
+
+// MARK: Managed objects
+
 @objc(Baby)
 public final class Baby: NSManagedObject {
     @NSManaged public var id: UUID?
@@ -29,6 +37,8 @@ public final class LogEntry: NSManagedObject {
     @NSManaged public var label: String?
     @NSManaged public var baby: Baby?
 }
+
+// MARK: Entry kinds
 
 enum EntryKind: String, CaseIterable, Identifiable {
     case bottle, nursing, diaper, sleep, note
@@ -90,13 +100,17 @@ enum EntryKind: String, CaseIterable, Identifiable {
     static let extras: [EntryKind] = [.pumping, .growth, .medicine, .tummyTime, .bath, .temperature]
 }
 
-enum NursingSide: String, CaseIterable, Identifiable {
+// Sendable is spelled out here, not inferred: `AppEnum` in Intents.swift
+// implies it, and Swift wants the conformance in the file that declares the
+// enum. The enums have to stay in this file because the widget target compiles
+// it and not Intents.swift.
+enum NursingSide: String, CaseIterable, Identifiable, Sendable {
     case left, right, both
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
 }
 
-enum DiaperKind: String, CaseIterable, Identifiable {
+enum DiaperKind: String, CaseIterable, Identifiable, Sendable {
     case wet, dirty, both
     var id: String { rawValue }
     var title: String {
@@ -107,6 +121,8 @@ enum DiaperKind: String, CaseIterable, Identifiable {
         }
     }
 }
+
+// MARK: The model
 
 /// The Core Data model, built in code so there is no .xcdatamodeld to keep in
 /// sync. Every attribute is optional or defaulted, which CloudKit requires.
@@ -180,6 +196,8 @@ enum MinaModel {
     }()
 }
 
+// MARK: Baby
+
 extension Baby {
     static func request() -> NSFetchRequest<Baby> {
         let request = NSFetchRequest<Baby>(entityName: "Baby")
@@ -204,21 +222,23 @@ extension Baby {
         guard let days = ageDays(on: date, calendar: calendar), let birthDate else { return "" }
         if days < 0 { return "Arriving soon" }
         if days == 0 { return "Born today" }
-        if days < 7 { return "\(days) \(days == 1 ? "day" : "days") old" }
+        if days < 7 { return Format.count(days, "day") + " old" }
         if days < 91 {
             let weeks = days / 7, rest = days % 7
-            var text = "\(weeks) \(weeks == 1 ? "week" : "weeks")"
-            if rest > 0 { text += ", \(rest) \(rest == 1 ? "day" : "days")" }
+            var text = Format.count(weeks, "week")
+            if rest > 0 { text += ", " + Format.count(rest, "day") }
             return text + " old"
         }
         let components = calendar.dateComponents([.month, .day], from: calendar.startOfDay(for: birthDate), to: calendar.startOfDay(for: date))
         let months = components.month ?? 0
         let weeks = (components.day ?? 0) / 7
-        var text = "\(months) \(months == 1 ? "month" : "months")"
-        if weeks > 0 { text += ", \(weeks) \(weeks == 1 ? "week" : "weeks")" }
+        var text = Format.count(months, "month")
+        if weeks > 0 { text += ", " + Format.count(weeks, "week") }
         return text + " old"
     }
 }
+
+// MARK: Entries
 
 extension LogEntry {
     static func request() -> NSFetchRequest<LogEntry> {
@@ -249,10 +269,12 @@ extension LogEntry {
         set { diaperRaw = newValue?.rawValue }
     }
     var isOngoingSleep: Bool { kind == .sleep && endedAt == nil }
+    var isOngoingNursing: Bool { kind == .nursing && endedAt == nil }
+    var isOngoing: Bool { isOngoingSleep || isOngoingNursing }
 
     func duration(now: Date = .now) -> TimeInterval? {
         guard let startedAt, kind.isTimed else { return nil }
-        let end = endedAt ?? (kind == .sleep ? now : startedAt)
+        let end = endedAt ?? ((kind == .sleep || kind == .nursing) ? now : startedAt)
         return max(0, end.timeIntervalSince(startedAt))
     }
 
@@ -267,7 +289,7 @@ extension LogEntry {
         case .bottle:
             return amountML > 0 ? "Bottle · \(unit.format(ml: amountML))" : "Bottle"
         case .nursing:
-            var parts = ["Nursed"]
+            var parts = [isOngoingNursing ? "Nursing" : "Nursed"]
             if let side { parts.append(side.title.lowercased()) }
             if let seconds = duration(now: now), seconds > 0 { parts.append(Format.duration(seconds)) }
             return parts.joined(separator: " · ")
@@ -306,6 +328,7 @@ extension LogEntry {
 
     /// The second line under a row: the note, or who logged it.
     var subtitle: String? {
+        if kind == .nursing, !isOngoingNursing, let label, !label.isEmpty, !label.contains(":") { return label }
         if kind != .note, let note, !note.trimmingCharacters(in: .whitespaces).isEmpty { return note }
         if let loggedBy, !loggedBy.isEmpty { return "by \(loggedBy)" }
         if isFromPartner { return "by your partner" }
@@ -322,6 +345,7 @@ extension LogEntry {
 extension LogEntry: Identifiable {}
 extension Baby: Identifiable {}
 
+// MARK: Measurements
 
 /// Growth and temperature follow the bottle unit: ounces means lb/oz, inches
 /// and °F; milliliters means kg, cm and °C.
@@ -351,8 +375,7 @@ enum Measure {
         return "\(VolumeUnit.trim((celsius * 10).rounded() / 10)) °C"
     }
 
+    /// Back from what a stepper shows to what the entry stores.
     static func celsius(fromDisplay value: Double, unit: VolumeUnit) -> Double { unit == .ounces ? (value - 32) * 5 / 9 : value }
-    static func displayTemperature(celsius: Double, unit: VolumeUnit) -> Double { unit == .ounces ? celsius * 9 / 5 + 32 : celsius }
-    static func displayLength(cm: Double, unit: VolumeUnit) -> Double { unit == .ounces ? cm / cmPerInch : cm }
     static func cm(fromDisplay value: Double, unit: VolumeUnit) -> Double { unit == .ounces ? value * cmPerInch : value }
 }

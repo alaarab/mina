@@ -44,14 +44,16 @@ enum NanitEventMapper {
 @MainActor
 final class NanitSync: ObservableObject {
     static let shared = NanitSync()
-    static let refreshTaskID = "com.alaarab.mina.nanit-sync"
-    static let source = "Nanit"
+    // Constants, not state: `nonisolated` so the background-task registration and
+    // PartnerAlerts can read them without hopping to the main actor.
+    nonisolated static let refreshTaskID = "com.alaarab.mina.nanit-sync"
+    nonisolated static let source = "Nanit"
 
-    private static let babyKey = "nanit.baby"
-    private static let linkedAtKey = "nanit.linkedAt"
-    private static let processedKey = "nanit.processed"
-    private static let seenTypesKey = "nanit.seenTypes"
-    private static let lastSyncKey = "nanit.lastSync"
+    private nonisolated static let babyKey = "nanit.baby"
+    private nonisolated static let linkedAtKey = "nanit.linkedAt"
+    private nonisolated static let processedKey = "nanit.processed"
+    private nonisolated static let seenTypesKey = "nanit.seenTypes"
+    private nonisolated static let lastSyncKey = "nanit.lastSync"
 
     @Published private(set) var baby: NanitBaby?
     @Published private(set) var lastSync: Date?
@@ -88,6 +90,11 @@ final class NanitSync: ObservableObject {
         Task { await sync() }
     }
 
+    /// Disconnecting leaves nothing behind: the Keychain token, the camera, the
+    /// processed message IDs, the seen type list and the scheduled background
+    /// refresh all go. Reconnecting later starts from a clean slate, which is
+    /// also what makes a re-link re-import recent sleeps instead of silently
+    /// skipping them as already processed.
     func unlink() {
         tokens = nil
         baby = nil
@@ -95,7 +102,11 @@ final class NanitSync: ObservableObject {
         seenTypes = []
         lastSync = nil
         lastError = nil
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.refreshTaskID)
     }
+
+    /// The name Settings and the docs use for `unlink()`.
+    func disconnect() { unlink() }
 
     private func validToken() async throws -> String {
         guard var current = tokens else { throw NanitError.sessionExpired }

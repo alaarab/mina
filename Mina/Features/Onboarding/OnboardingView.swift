@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// The first screen on a fresh install: a name, a birthday, and one button that
+/// creates the baby. The partner never sees it; they open the share link
+/// instead, which is what the card at the bottom is there to say.
+
 struct OnboardingView: View {
     @Environment(\.managedObjectContext) private var context
     @EnvironmentObject private var sync: SyncMonitor
@@ -63,12 +67,12 @@ struct OnboardingView: View {
                 }
                 .padding(20)
             }
-            .background(MinaTheme.canvas.ignoresSafeArea())
-            .alert("Couldn't save", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("OK") {}
-            } message: { Text(error ?? "") }
+            .minaCanvas()
+            .errorAlert($error)
         }
     }
+
+    // MARK: Actions
 
     private func create() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)

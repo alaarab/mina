@@ -1,6 +1,13 @@
 import CoreData
 import SwiftUI
 
+/// The month view: a dot-per-kind grid you can page back through two years, and
+/// under it the totals and full timeline for whichever day is selected. The
+/// fetch reaches a day either side of the month so an overnight sleep is clipped
+/// into the day it belongs to rather than dropped.
+
+// MARK: Grid math
+
 /// Month grid math, kept pure so it can be tested.
 enum MonthGrid {
     /// 7-wide rows of days, nil for padding cells outside the month.
@@ -24,11 +31,14 @@ enum MonthGrid {
     }
 }
 
+// MARK: Screen
+
 struct CalendarView: View {
     @ObservedObject var baby: Baby
 
     @State private var month = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var selected = Calendar.current.startOfDay(for: .now)
+    @State private var showingHistory = DebugLaunch.argument("-open") == "history"
 
     private var calendar: Calendar { .current }
 
@@ -43,9 +53,16 @@ struct CalendarView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle("Calendar")
+            .navigationDestination(isPresented: $showingHistory) { HistoryView(baby: baby) }
+            .onAppear {
+                if let back = DebugLaunch.argument("-months-back").flatMap(Int.init), back > 0 { shift(-back) }
+            }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink { HistoryView(baby: baby) } label: { Label("History", systemImage: "magnifyingglass") }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Today") { jumpToToday() }
                         .font(.mina(.subheadline, weight: .semibold))
@@ -54,15 +71,28 @@ struct CalendarView: View {
         }
     }
 
+    // MARK: Subviews
+
     private var monthHeader: some View {
         HStack {
             Button { shift(-1) } label: {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).frame(width: 40, height: 40)
             }
             Spacer()
-            Text(month.formatted(.dateTime.month(.wide).year()))
-                .font(.mina(.title3, weight: .bold))
-                .foregroundStyle(MinaTheme.text)
+            Menu {
+                ForEach(recentMonths, id: \.self) { candidate in
+                    Button(candidate.formatted(.dateTime.month(.wide).year())) {
+                        withAnimation(.snappy) { month = candidate; selected = candidate }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(month.formatted(.dateTime.month(.wide).year()))
+                        .font(.mina(.title3, weight: .bold))
+                        .foregroundStyle(MinaTheme.text)
+                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(MinaTheme.textMuted)
+                }
+            }
             Spacer()
             Button { shift(1) } label: {
                 Image(systemName: "chevron.right").font(.system(size: 16, weight: .semibold)).frame(width: 40, height: 40)
@@ -70,6 +100,14 @@ struct CalendarView: View {
             .disabled(calendar.compare(month, to: .now, toGranularity: .month) != .orderedAscending)
         }
         .padding(.top, 4)
+    }
+
+    // MARK: Actions
+
+    /// This month and the 23 before it, newest first.
+    private var recentMonths: [Date] {
+        let start = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
+        return (0..<24).compactMap { calendar.date(byAdding: .month, value: -$0, to: start) }
     }
 
     private func shift(_ months: Int) {
@@ -91,18 +129,19 @@ struct CalendarView: View {
     }
 }
 
+// MARK: One month
+
 private struct MonthSection: View {
     @ObservedObject var baby: Baby
     let month: Date
     @Binding var selected: Date
 
     @Environment(\.managedObjectContext) private var context
-    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @StoredVolumeUnit private var unit
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var editing: LogEntry?
     @State private var error: String?
 
-    private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
     private var calendar: Calendar { .current }
 
     init(baby: Baby, month: Date, selected: Binding<Date>) {
@@ -116,16 +155,14 @@ private struct MonthSection: View {
     }
 
     var body: some View {
-        let byDay = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.startedAt ?? .distantPast) }
+        let byDay = DayGrouping.byDay(entries, calendar: calendar)
         let now = Date.now
         VStack(spacing: 16) {
             grid(byDay: byDay, now: now)
             dayDetail(byDay[selected] ?? [], now: now)
         }
         .sheet(item: $editing) { EntryEditor(entry: $0) }
-        .alert("Couldn't delete", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK") {}
-        } message: { Text(error ?? "") }
+        .errorAlert($error, title: "Couldn't delete")
     }
 
     private func grid(byDay: [Date: [LogEntry]], now: Date) -> some View {
@@ -164,7 +201,7 @@ private struct MonthSection: View {
                 .padding(.horizontal, 4)
             HStack(spacing: 10) {
                 SummaryPill(symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle,
-                            text: "\(summary.feeds) \(summary.feeds == 1 ? "feed" : "feeds")" + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
+                            text: Format.count(summary.feeds, "feed") + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
                 SummaryPill(symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper, text: "\(summary.wet) wet · \(summary.dirty) dirty")
                 SummaryPill(symbol: EntryKind.sleep.symbol, color: MinaTheme.sleep, text: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "no sleep logged")
             }
@@ -183,6 +220,8 @@ private struct MonthSection: View {
         }
     }
 }
+
+// MARK: Pieces
 
 private struct DayCell: View {
     let day: Date

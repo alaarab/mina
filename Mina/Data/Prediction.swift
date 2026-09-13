@@ -1,5 +1,9 @@
 import Foundation
 
+/// Two guesses the Today screen makes out loud: when she'll want feeding next,
+/// and when her nap window opens. Both are pure functions over the log and an
+/// age, with no Core Data in sight, so they're tested directly.
+
 struct FeedPrediction: Equatable {
     let expectedAt: Date
     let interval: TimeInterval

@@ -3,6 +3,11 @@ import CoreData
 import SwiftUI
 import UIKit
 
+/// The app's entry point and its scaffolding: the one-time setup that runs
+/// before the first screen, the delegates that catch CloudKit share links and
+/// remote pushes, and the tab bar that picks between the baby's log and
+/// onboarding.
+
 @main
 struct MinaApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate

@@ -1,6 +1,14 @@
 import CoreData
 import SwiftUI
 
+/// The home screen: how long since the last feed, what's running right now, the
+/// day's counts against what's typical for her age, the six one-tap log buttons,
+/// and a timeline of today and yesterday. Everything on it is derived from a
+/// single fetch of the last two days, re-rendered every minute so the relative
+/// times stay honest.
+
+// MARK: Screen
+
 struct TodayView: View {
     @ObservedObject var baby: Baby
 
@@ -18,15 +26,15 @@ private struct TodayContent: View {
     let now: Date
 
     @Environment(\.managedObjectContext) private var context
-    @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
+    @StoredVolumeUnit private var unit
+    /// Read back through `Prefs`, but observed here so the Bottle button's
+    /// "Last 4 oz" follows a feed logged by a widget or by Siri.
     @AppStorage(Prefs.lastBottleKey, store: Prefs.defaults) private var lastBottleML = 0.0
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var sheet: QuickSheet?
     @State private var editing: LogEntry?
     @State private var error: String?
-    @State private var asking = false
-
-    private var unit: VolumeUnit { VolumeUnit(rawValue: unitRaw) ?? .ounces }
+    @State private var asking = DebugLaunch.argument("-open") == "ask"
 
     init(baby: Baby, now: Date) {
         _baby = ObservedObject(wrappedValue: baby)
@@ -37,6 +45,7 @@ private struct TodayContent: View {
     }
 
     private var sleeping: LogEntry? { entries.first { $0.isOngoingSleep } }
+    private var nursing: LogEntry? { entries.first { $0.isOngoingNursing } }
     private var lastFeed: LogEntry? { entries.first { $0.kind.isFeed } }
     private var summary: DaySummary { DaySummary(entries: Array(entries), day: now, now: now) }
     private var stage: GuideStage? { baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)) }
@@ -63,7 +72,7 @@ private struct TodayContent: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .background(MinaTheme.canvas.ignoresSafeArea())
+            .minaCanvas()
             .navigationTitle(baby.displayName)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -76,19 +85,19 @@ private struct TodayContent: View {
             .sheet(item: $sheet) { sheet in
                 switch sheet {
                 case .bottle: BottleSheet(unit: unit) { log($0) }
-                case .nursing: NursingSheet { log($0) }
+                case .nursing: NursingSheet(onStart: startNursing) { log($0) }
                 case .note: NoteSheet { log($0) }
                 case .extra(let kind): ExtraSheet(kind: kind, unit: unit) { log($0) }
                 }
             }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
-            .alert("Couldn't save", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("OK") {}
-            } message: { Text(error ?? "") }
+            .errorAlert($error)
             .onAppear { Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now) }
             .onChange(of: entries.count) { _, _ in Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now) }
         }
     }
+
+    // MARK: Subviews
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -125,6 +134,30 @@ private struct TodayContent: View {
                     }
                 }
                 Spacer(minLength: 0)
+            }
+            if let nursing, let since = nursing.startedAt {
+                Divider()
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(MinaTheme.nursing)
+                        .frame(width: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Nursing · \(Format.duration(now.timeIntervalSince(since)))")
+                            .font(.mina(.headline))
+                        Text(nursingSideText(nursing))
+                            .font(.mina(.subheadline))
+                            .foregroundStyle(MinaTheme.textSecondary)
+                    }
+                    Spacer()
+                    Button { switchSide(nursing) } label: { Image(systemName: "arrow.left.arrow.right").frame(width: 30, height: 30) }
+                        .buttonStyle(.bordered).tint(MinaTheme.nursing)
+                        .accessibilityLabel("Switch side")
+                    Button("Done") { endNursing(nursing) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(MinaTheme.nursing)
+                        .font(.mina(.subheadline, weight: .semibold))
+                }
             }
             if let prediction = feedPrediction, sleeping == nil || prediction.expectedAt > now {
                 Divider()
@@ -195,16 +228,9 @@ private struct TodayContent: View {
                      detail: "\(summary.wet) wet · \(summary.dirty) dirty",
                      expect: stage.map { "expect \($0.expectation.wetText())" })
             StatTile(title: "Sleep", value: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "0m", color: MinaTheme.sleep,
-                     detail: "\(summary.sleeps) \(summary.sleeps == 1 ? "stretch" : "stretches")",
+                     detail: Format.count(summary.sleeps, "stretch", "stretches"),
                      expect: stage.map { "expect \($0.expectation.sleepText())" })
         }
-    }
-
-    private func feedDetail(_ summary: DaySummary) -> String {
-        var parts: [String] = []
-        if summary.bottleML > 0 { parts.append(unit.format(ml: summary.bottleML)) }
-        if summary.nursingCount > 0 { parts.append("\(summary.nursingCount) nursed") }
-        return parts.isEmpty ? "nothing yet" : parts.joined(separator: " · ")
     }
 
     private var quickLog: some View {
@@ -213,8 +239,14 @@ private struct TodayContent: View {
                 QuickButton(title: "Bottle", subtitle: "Last \(unit.format(ml: Prefs.lastBottleML))", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle) {
                     sheet = .bottle
                 }
-                QuickButton(title: "Nurse", subtitle: "Left or right", symbol: EntryKind.nursing.symbol, color: MinaTheme.nursing) {
-                    sheet = .nursing
+                if let nursing, let since = nursing.startedAt {
+                    QuickButton(title: "Done nursing", subtitle: "\(Format.duration(now.timeIntervalSince(since))) so far", symbol: "heart.fill", color: MinaTheme.nursing) {
+                        endNursing(nursing)
+                    }
+                } else {
+                    QuickButton(title: "Nurse", subtitle: "Start on the \(Prefs.suggestedNursingSide.title.lowercased())", symbol: EntryKind.nursing.symbol, color: MinaTheme.nursing) {
+                        sheet = .nursing
+                    }
                 }
                 Menu {
                     ForEach(DiaperKind.allCases) { kind in
@@ -232,31 +264,27 @@ private struct TodayContent: View {
                         log(EntryDraft(kind: .sleep, startedAt: now))
                     }
                 }
-            }
-            HStack(spacing: 10) {
-                Button {
+                QuickButton(title: "Pump", subtitle: pumpSubtitle, symbol: EntryKind.pumping.symbol, color: MinaTheme.nursing) {
+                    sheet = .extra(.pumping)
+                }
+                QuickButton(title: "Note", subtitle: "Anything worth remembering", symbol: EntryKind.note.symbol, color: MinaTheme.note) {
                     sheet = .note
-                } label: {
-                    Label("Note", systemImage: "square.and.pencil").pillLabel()
                 }
-                .buttonStyle(.plain)
-                Menu {
-                    ForEach(EntryKind.extras) { kind in
-                        Button(kind.title, systemImage: kind.symbol) {
-                            if kind == .bath { log(EntryDraft(kind: .bath, startedAt: now)) } else { sheet = .extra(kind) }
-                        }
+            }
+            Menu {
+                ForEach(EntryKind.extras.filter { $0 != .pumping }) { kind in
+                    Button(kind.title, systemImage: kind.symbol) {
+                        if kind == .bath { log(EntryDraft(kind: .bath, startedAt: now)) } else { sheet = .extra(kind) }
                     }
-                } label: {
-                    Label("More", systemImage: "plus.circle").pillLabel()
                 }
+            } label: {
+                Label("Growth, medicine, tummy time, bath, temperature", systemImage: "plus.circle").pillLabel()
             }
         }
     }
 
     private var timeline: some View {
-        let calendar = Calendar.current
-        let groups = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.startedAt ?? now) }
-            .sorted { $0.key > $1.key }
+        let groups = DayGrouping.days(entries, missing: now)
         return VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
                 VStack(spacing: 6) {
@@ -270,7 +298,7 @@ private struct TodayContent: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             }
-            ForEach(groups, id: \.key) { day, dayEntries in
+            ForEach(groups, id: \.day) { day, dayEntries in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(Format.dayTitle(day, now: now))
@@ -287,16 +315,40 @@ private struct TodayContent: View {
         }
     }
 
+    // MARK: Text
+
+    private var pumpSubtitle: String {
+        let pumped = summary.pumpedML
+        return pumped > 0 ? "\(unit.format(ml: pumped)) today" : "Amount and side"
+    }
+
+    private func feedDetail(_ summary: DaySummary) -> String {
+        var parts: [String] = []
+        if summary.bottleML > 0 { parts.append(unit.format(ml: summary.bottleML)) }
+        if summary.nursingCount > 0 { parts.append("\(summary.nursingCount) nursed") }
+        return parts.isEmpty ? "nothing yet" : parts.joined(separator: " · ")
+    }
+
+    /// The one-line recap beside a day header in the timeline.
     private func dayLine(_ dayEntries: [LogEntry], day: Date) -> String {
         let summary = DaySummary(entries: dayEntries, day: day, now: now)
         var parts: [String] = []
         if summary.feeds > 0 {
-            parts.append("\(summary.feeds) \(summary.feeds == 1 ? "feed" : "feeds")" + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
+            parts.append(Format.count(summary.feeds, "feed") + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
         }
-        if summary.diapers > 0 { parts.append("\(summary.diapers) \(summary.diapers == 1 ? "diaper" : "diapers")") }
+        if summary.diapers > 0 { parts.append(Format.count(summary.diapers, "diaper")) }
         if summary.sleepSeconds > 0 { parts.append("\(Format.duration(summary.sleepSeconds)) sleep") }
         if summary.pumpedML > 0 { parts.append("\(unit.format(ml: summary.pumpedML)) pumped") }
         return parts.joined(separator: " · ")
+    }
+
+    /// "On the left" while one side is running; the split once she's switched.
+    private func nursingSideText(_ entry: LogEntry) -> String {
+        let segments = (entry.label ?? "").split(separator: "|")
+        if let last = segments.last, let side = NursingSide(rawValue: String(last.split(separator: ":").first ?? "")) {
+            return segments.count > 1 ? "Now on the \(side.title.lowercased()) · switched \(segments.count - 1)×" : "On the \(side.title.lowercased())"
+        }
+        return entry.side.map { "On the \($0.title.lowercased())" } ?? ""
     }
 
     // MARK: Actions
@@ -316,6 +368,21 @@ private struct TodayContent: View {
         log(draft)
     }
 
+    private func startNursing(_ side: NursingSide) {
+        do {
+            try Logbook.shared.startNursing(side: side, for: baby, at: now, in: context)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func switchSide(_ entry: LogEntry) {
+        do { try Logbook.shared.switchNursingSide(entry, at: now, in: context) } catch { self.error = error.localizedDescription }
+    }
+
+    private func endNursing(_ entry: LogEntry) {
+        do { try Logbook.shared.endNursing(entry, at: now, in: context) } catch { self.error = error.localizedDescription }
+    }
+
     private func endSleep(_ entry: LogEntry) {
         entry.endedAt = max(now, entry.startedAt ?? now)
         do { try context.save() } catch { self.error = error.localizedDescription }
@@ -325,6 +392,8 @@ private struct TodayContent: View {
         do { try Logbook.shared.delete(entry, in: context) } catch { self.error = error.localizedDescription }
     }
 }
+
+// MARK: Pieces
 
 struct StatTile: View {
     let title: String
@@ -410,7 +479,6 @@ struct QuickButton: View {
         .buttonStyle(.plain)
     }
 }
-
 
 private extension View {
     func pillLabel() -> some View {

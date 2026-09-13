@@ -1,6 +1,11 @@
 import SwiftUI
 
 /// Email and password, then the emailed code, then pick the baby.
+///
+/// The password exists only as `@State` on this sheet, only for as long as
+/// Nanit's two-step login needs it, and is never written to disk, defaults, the
+/// Keychain or a log. `clearCredentials()` wipes it the moment it is done with,
+/// and again when the sheet goes away.
 struct NanitLinkSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var nanit = NanitSync.shared
@@ -46,7 +51,11 @@ struct NanitLinkSheet: View {
                     Section("Which camera?") {
                         ForEach(babies) { baby in
                             Button {
-                                if let tokens { nanit.link(tokens: tokens, baby: baby); dismiss() }
+                                if let tokens {
+                                    nanit.link(tokens: tokens, baby: baby)
+                                    clearCredentials()
+                                    dismiss()
+                                }
                             } label: {
                                 HStack { Text(baby.name); Spacer(); Image(systemName: "video.fill").foregroundStyle(MinaTheme.textMuted) }
                             }
@@ -62,6 +71,15 @@ struct NanitLinkSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
+        .onDisappear { clearCredentials() }
+    }
+
+    /// Nothing secret outlives the sheet, whether linking worked or not.
+    private func clearCredentials() {
+        password = ""
+        code = ""
+        mfaToken = nil
+        tokens = nil
     }
 
     private func row(_ title: String) -> some View {
@@ -85,16 +103,23 @@ struct NanitLinkSheet: View {
         do {
             switch try await nanit.client.login(email: email, password: password, mfaToken: mfaToken, code: code) {
             case .tokens(let tokens): await loadBabies(tokens)
-            case .needsCode(let token): mfaToken = token; self.error = "Nanit asked for another code. Check your email."
+            case .needsCode(let token):
+                mfaToken = token
+                code = ""
+                self.error = "Nanit asked for another code. Check your email."
             }
         } catch { self.error = error.localizedDescription }
     }
 
     private func loadBabies(_ tokens: NanitTokens) async {
         self.tokens = tokens
+        // Past this point the token does the talking, so drop the password and
+        // the one-time code even if listing the cameras fails.
+        password = ""
+        code = ""
+        mfaToken = nil
         do {
             babies = try await nanit.client.babies(token: tokens.accessToken)
-            password = ""
             step = .baby
         } catch { self.error = error.localizedDescription }
     }

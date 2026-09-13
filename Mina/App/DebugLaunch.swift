@@ -14,10 +14,15 @@ enum DebugLaunch {
         #endif
     }
 
-    static var initialTab: String? {
+    static var initialTab: String? { argument("-tab") }
+
+    /// The value after a named launch argument: `-open history` lands on
+    /// History, `-history-query x` and `-history-filter feeds` preset it,
+    /// `-seed-days 20` sets how much demo data to make.
+    static func argument(_ name: String) -> String? {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "-tab"), index + 1 < arguments.count else { return nil }
+        guard let index = arguments.firstIndex(of: name), index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
         #else
         return nil
@@ -28,21 +33,27 @@ enum DebugLaunch {
         #if DEBUG
         guard ProcessInfo.processInfo.arguments.contains("-seed-demo"),
               logbook.currentBaby(in: context) == nil else { return }
+        let clock = Date.now
+        defer { NSLog("seed-demo: \(Int(Date.now.timeIntervalSince(clock) * 1000)) ms") }
         let calendar = Calendar.current
         let now = Date.now
         let today = calendar.startOfDay(for: now)
+        let days = argument("-seed-days").flatMap(Int.init) ?? 12
         do {
-            let baby = try logbook.createBaby(name: "Mina", birthDate: calendar.date(byAdding: .day, value: -23, to: today)!, in: context)
+            // The date force unwraps here and in `add` below: adding whole days
+            // to a start-of-day date only fails for a calendar this app never uses.
+            let birthDate = calendar.date(byAdding: .day, value: -max(23, days + 11), to: today)!
+            let baby = try logbook.createBaby(name: "Mina", birthDate: birthDate, in: context)
             func add(_ kind: EntryKind, day: Int, hour: Double, _ configure: (inout EntryDraft) -> Void = { _ in }) throws {
                 let start = calendar.date(byAdding: .day, value: -day, to: today)!.addingTimeInterval(hour * 3600)
                 guard start <= now else { return }
                 var draft = EntryDraft(kind: kind, startedAt: start)
                 draft.loggedBy = hour.truncatingRemainder(dividingBy: 2) == 0 ? "Dad" : "Mom"
                 configure(&draft)
-                try logbook.add(draft, to: baby, in: context)
+                try logbook.add(draft, to: baby, in: context, save: false)
             }
             let oz = VolumeUnit.millilitersPerOunce
-            for day in 0..<12 {
+            for day in 0..<days {
                 for (index, hour) in [1.0, 4.0, 7.0, 10.0, 13.0, 16.0, 19.0, 22.0].enumerated() {
                     if index % 3 == 1 {
                         try add(.nursing, day: day, hour: hour) { $0.side = index % 2 == 0 ? .left : .right; $0.endedAt = $0.startedAt.addingTimeInterval(15 * 60) }
@@ -53,9 +64,13 @@ enum DebugLaunch {
                     if index < 7 { try add(.sleep, day: day, hour: hour + 1) { $0.endedAt = $0.startedAt.addingTimeInterval(1.6 * 3600) } }
                 }
             }
+            try add(.pumping, day: 0, hour: 9.5) { $0.amountML = 4 * oz; $0.side = .both }
+            for day in stride(from: 3, to: days, by: 7) { try add(.growth, day: day, hour: 10) { $0.weightGrams = 3400 + Double(days - day) * 28 } }
+            for day in stride(from: 0, to: days, by: 1) where day % 5 == 0 { try add(.medicine, day: day, hour: 8) { $0.label = "Vitamin D · 400 IU" } }
             try add(.note, day: 1, hour: 15) { $0.note = "Vitamin D drops" }
             try add(.note, day: 3, hour: 11) { $0.note = "First real smile at Mom" }
             try add(.sleep, day: 0, hour: Double(calendar.component(.hour, from: now)) - 0.7)
+            try context.save()
         } catch {
             assertionFailure("demo seed failed: \(error)")
         }
