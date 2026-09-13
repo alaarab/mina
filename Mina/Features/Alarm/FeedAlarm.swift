@@ -12,6 +12,13 @@ enum FeedAlarm {
     static let onKey = "feedAlarmOn"
     static let gapKey = "feedAlarmGapMinutes"    // 0 = use her predicted next feed
     static let idKey = "feedAlarmID"
+    static let dismissedAtKey = "feedAlarmDismissedAt"
+
+    /// Set when the alarm was dismissed and no feed has been logged since.
+    static var pendingDismissal: Date? {
+        get { Prefs.defaults.object(forKey: dismissedAtKey) as? Date }
+        set { Prefs.defaults.set(newValue, forKey: dismissedAtKey) }
+    }
     static let gaps: [(minutes: Int, title: String)] = [(0, "Predicted"), (120, "2 h"), (150, "2½ h"), (180, "3 h"), (210, "3½ h"), (240, "4 h")]
 
     static var isSupported: Bool {
@@ -49,7 +56,7 @@ enum FeedAlarm {
                 guard status == .authorized else { return }
                 let alert = AlarmPresentation.Alert(
                     title: LocalizedStringResource(stringLiteral: "\(babyName)'s feed"),
-                    stopButton: .init(text: "Log feed", textColor: .white, systemImageName: "waterbottle.fill"),
+                    stopButton: .init(text: "I'm up", textColor: .white, systemImageName: "sun.max.fill"),
                     secondaryButton: .init(text: "Snooze 10 min", textColor: .white, systemImageName: "zzz"),
                     secondaryButtonBehavior: .countdown)
                 let countdown = AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: "Snoozed · \(babyName)'s feed"), pauseButton: nil)
@@ -60,7 +67,7 @@ enum FeedAlarm {
                 let configuration = AlarmManager.AlarmConfiguration<FeedAlarmMetadata>(
                     countdownDuration: .init(preAlert: nil, postAlert: 600),
                     schedule: .fixed(date), attributes: attributes,
-                    stopIntent: LogFeedFromAlarmIntent(), secondaryIntent: nil, sound: .default)
+                    stopIntent: DismissFeedAlarmIntent(), secondaryIntent: nil, sound: .default)
                 let id = UUID()
                 _ = try await manager.schedule(id: id, configuration: configuration)
                 Prefs.defaults.set(id.uuidString, forKey: idKey)
@@ -80,20 +87,14 @@ enum FeedAlarm {
     }
 }
 
-/// The alarm's Stop button: logs a bottle at the last amount so the feed is on
-/// the record before the phone is even unlocked. Edit it later if it was nursing.
-struct LogFeedFromAlarmIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Log feed from alarm"
+/// The alarm's Stop button only dismisses the alarm. Stopping an alarm means
+/// someone is up, not that the baby ate; the app asks to log the feed instead.
+struct DismissFeedAlarmIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Dismiss feed alarm"
     static var isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
-        let milliliters = Prefs.lastBottleML
-        _ = try? await Logbook.shared.perform { context, baby in
-            var draft = EntryDraft(kind: .bottle)
-            draft.amountML = milliliters
-            draft.note = "Logged from the alarm"
-            return try Logbook.shared.add(draft, to: baby, in: context)
-        }
+        Prefs.defaults.set(Date.now, forKey: FeedAlarm.dismissedAtKey)
         return .result()
     }
 }
