@@ -10,7 +10,7 @@ Say “Hey Siri, Mina ate four ounces” and it's logged on both parents' phones
 Mina is a newborn log built for two tired parents and one phone each.
 
 SAY IT, IT'S LOGGED
-The app's name is the trigger word, so the phrases sound like something you'd say at 3 AM: “Mina ate four ounces.” “Mina just peed.” “Mina is asleep.” “When did Mina last eat?” Siri answers back so you know it landed. No setup, no shortcuts to build.
+“My baby ate four ounces.” “The baby just peed.” “Mina is asleep.” “When did my baby last eat?” The app's name and “my baby” both work as the trigger, so it sounds like something you'd say at 3 AM whatever your child is called, and Siri answers back with her name. No setup, no shortcuts to build. With twins, say “for Olivia” or Siri asks which.
 
 BOTH PHONES, ONE LOG
 Share once over iCloud and you both see the same log. Every entry shows who logged it, and the other phone gets a gentle alert: “Mom fed Mina: 4 oz at 2:15 PM.” No accounts, no servers, no ads.

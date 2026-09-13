@@ -72,9 +72,20 @@ struct EntrySnapshot {
 
 enum LogbookError: Error, LocalizedError, CustomLocalizedStringResourceConvertible {
     case notSetUp
+    case ambiguous
 
-    var errorDescription: String? { "Open Mina and set up your baby first." }
-    var localizedStringResource: LocalizedStringResource { "Open Mina and set up your baby first." }
+    var errorDescription: String? {
+        switch self {
+        case .notSetUp: return "Open Mina and set up your baby first."
+        case .ambiguous: return "Which baby? Say the name, like “for Olivia”."
+        }
+    }
+    var localizedStringResource: LocalizedStringResource {
+        switch self {
+        case .notSetUp: return "Open Mina and set up your baby first."
+        case .ambiguous: return "Which baby? Say the name, like “for Olivia”."
+        }
+    }
 }
 
 // MARK: Logbook
@@ -308,11 +319,23 @@ final class Logbook: @unchecked Sendable {
 
     // MARK: Background work (Siri)
 
-    /// Runs `work` on a fresh background context with the current baby.
-    func perform<T>(_ work: @escaping (NSManagedObjectContext, Baby) throws -> T) async throws -> T {
+    /// Runs `work` on a fresh background context with the chosen baby: the one
+    /// named, else the selected one when there's exactly one candidate.
+    func perform<T>(babyID: UUID? = nil, _ work: @escaping (NSManagedObjectContext, Baby) throws -> T) async throws -> T {
         let context = persistence.newBackgroundContext()
         return try await context.perform {
-            guard let baby = self.currentBaby(in: context) else { throw LogbookError.notSetUp }
+            let babies = (try? context.fetch(Baby.request())) ?? []
+            guard !babies.isEmpty else { throw LogbookError.notSetUp }
+            let baby: Baby
+            if let babyID {
+                guard let named = babies.first(where: { $0.id == babyID }) else { throw LogbookError.notSetUp }
+                baby = named
+            } else if babies.count > 1, Prefs.selectedBabyID == nil {
+                throw LogbookError.ambiguous
+            } else {
+                guard let chosen = self.persistence.preferredBaby(from: babies) else { throw LogbookError.notSetUp }
+                baby = chosen
+            }
             return try work(context, baby)
         }
     }

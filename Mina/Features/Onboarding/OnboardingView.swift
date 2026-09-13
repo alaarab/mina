@@ -37,6 +37,16 @@ struct OnboardingView: View {
                     }
                     .minaCard()
 
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Then just say").font(.mina(.headline))
+                        Text("“Hey Siri, my baby ate four ounces.”").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                        Text("“Hey Siri, the baby just pooped.”").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                        Text("“My baby” and “Mina” both work as the trigger. Replies use \(name.trimmingCharacters(in: .whitespaces).isEmpty ? "her name" : name + "'s name").")
+                            .font(.mina(.footnote)).foregroundStyle(MinaTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .minaCard()
+
                     Button {
                         create()
                     } label: {

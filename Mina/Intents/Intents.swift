@@ -28,7 +28,23 @@ extension DiaperKind: AppEnum {
 
 // MARK: Logging intents
 
+
+/// Shared by every logging intent: picks the baby, asking when a household
+/// has more than one and none was named.
+enum BabyChoice {
+    static func resolve(_ chosen: BabyEntity?) async throws -> UUID? {
+        if let chosen { return chosen.id }
+        let babies = try await BabyQuery().suggestedEntities()
+        if babies.count <= 1 { return nil }
+        if let selected = Prefs.selectedBabyID, babies.contains(where: { $0.id == selected }) { return selected }
+        throw LogbookError.ambiguous
+    }
+}
+
 struct LogBottleIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log a bottle"
     static var description = IntentDescription("Records how much she drank from a bottle, right now.")
     static var openAppWhenRun = false
@@ -40,7 +56,7 @@ struct LogBottleIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let milliliters = amount.milliliters
-        let snapshot = try await Logbook.shared.perform { context, baby in
+        let snapshot = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby in
             var draft = EntryDraft(kind: .bottle)
             draft.amountML = milliliters
             return EntrySnapshot(entry: try Logbook.shared.add(draft, to: baby, in: context))
@@ -52,6 +68,9 @@ struct LogBottleIntent: AppIntent {
 }
 
 struct LogNursingIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log nursing"
     static var description = IntentDescription("Records a nursing session that just finished.")
     static var openAppWhenRun = false
@@ -67,7 +86,7 @@ struct LogNursingIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let side = side
         let minutes = minutes
-        let snapshot = try await Logbook.shared.perform { context, baby in
+        let snapshot = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby in
             let now = Date.now
             var draft = EntryDraft(kind: .nursing, startedAt: minutes.map { now.addingTimeInterval(-Double($0) * 60) } ?? now)
             draft.side = side
@@ -81,6 +100,9 @@ struct LogNursingIntent: AppIntent {
 }
 
 struct LogDiaperIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log a diaper"
     static var description = IntentDescription("Records a diaper change.")
     static var openAppWhenRun = false
@@ -91,13 +113,13 @@ struct LogDiaperIntent: AppIntent {
     static var parameterSummary: some ParameterSummary { Summary("Log a \(\.$kind) diaper") }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: "\(try await logDiaper(kind))")
+        .result(dialog: "\(try await logDiaper(kind, baby: baby))")
     }
 }
 
 /// Shared by the diaper intents so "Mina peed" and "Mina had a wet diaper" do the same thing.
-private func logDiaper(_ kind: DiaperKind) async throws -> String {
-    let snapshot = try await Logbook.shared.perform { context, baby in
+private func logDiaper(_ kind: DiaperKind, baby chosen: BabyEntity?) async throws -> String {
+    let snapshot = try await Logbook.shared.perform(babyID: BabyChoice.resolve(chosen)) { context, baby in
         var draft = EntryDraft(kind: .diaper)
         draft.diaper = kind
         return EntrySnapshot(entry: try Logbook.shared.add(draft, to: baby, in: context))
@@ -106,26 +128,35 @@ private func logDiaper(_ kind: DiaperKind) async throws -> String {
 }
 
 struct LogPeeIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log a pee"
     static var description = IntentDescription("Records a wet diaper.")
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: "\(try await logDiaper(.wet))")
+        .result(dialog: "\(try await logDiaper(.wet, baby: baby))")
     }
 }
 
 struct LogPoopIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log a poop"
     static var description = IntentDescription("Records a dirty diaper.")
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: "\(try await logDiaper(.dirty))")
+        .result(dialog: "\(try await logDiaper(.dirty, baby: baby))")
     }
 }
 
 struct LogPumpingIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log pumping"
     static var description = IntentDescription("Records how much was pumped.")
     static var openAppWhenRun = false
@@ -137,7 +168,7 @@ struct LogPumpingIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let milliliters = amount.milliliters
-        let snapshot = try await Logbook.shared.perform { context, baby in
+        let snapshot = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby in
             var draft = EntryDraft(kind: .pumping)
             draft.amountML = milliliters
             draft.side = .both
@@ -148,12 +179,15 @@ struct LogPumpingIntent: AppIntent {
 }
 
 struct StartSleepIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Start sleep"
     static var description = IntentDescription("Marks her as asleep from now.")
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let (name, ongoingSince) = try await Logbook.shared.perform { context, baby -> (String, Date?) in
+        let (name, ongoingSince) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, Date?) in
             if let sleeping = Logbook.shared.ongoingSleep(for: baby, in: context) {
                 return (baby.displayName, sleeping.startedAt)
             }
@@ -168,12 +202,15 @@ struct StartSleepIntent: AppIntent {
 }
 
 struct EndSleepIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "End sleep"
     static var description = IntentDescription("Marks her as awake and closes the current sleep.")
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let (name, slept) = try await Logbook.shared.perform { context, baby -> (String, TimeInterval?) in
+        let (name, slept) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, TimeInterval?) in
             let ended = try Logbook.shared.endSleep(for: baby, in: context)
             return (baby.displayName, ended?.duration())
         }
@@ -183,6 +220,9 @@ struct EndSleepIntent: AppIntent {
 }
 
 struct LogWeightIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Log weight"
     static var description = IntentDescription("Records a weight as a growth entry.")
     static var openAppWhenRun = false
@@ -194,7 +234,7 @@ struct LogWeightIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let grams = weight.grams
-        let snapshot = try await Logbook.shared.perform { context, baby in
+        let snapshot = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby in
             var draft = EntryDraft(kind: .growth)
             draft.weightGrams = grams
             return EntrySnapshot(entry: try Logbook.shared.add(draft, to: baby, in: context))
@@ -206,6 +246,9 @@ struct LogWeightIntent: AppIntent {
 // MARK: Asking intents
 
 struct FeedStatusIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
     static var title: LocalizedStringResource = "Last feed"
     static var description = IntentDescription("Says when she last ate and how today is going.")
     static var openAppWhenRun = false
@@ -219,7 +262,7 @@ struct FeedStatusIntent: AppIntent {
             return .result(dialog: "Yesterday, \(entity.spoken)")
         }
         let now = Date.now
-        let (name, last, lastPoop, summary) = try await Logbook.shared.perform { context, baby -> (String, EntrySnapshot?, Date?, DaySummary) in
+        let (name, last, lastPoop, summary) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, EntrySnapshot?, Date?, DaySummary) in
             let last = Logbook.shared.lastFeed(for: baby, in: context).map(EntrySnapshot.init)
             let lastPoop = Logbook.shared.lastDirtyDiaper(for: baby, in: context)?.startedAt
             let start = Calendar.current.startOfDay(for: now)
@@ -264,6 +307,8 @@ struct MinaShortcuts: AppShortcutsProvider {
             "We fed \(.applicationName) \(\.$amount)",
             "Log \(\.$amount) in \(.applicationName)",
             "\(.applicationName) ate",
+            "Log a bottle for \(\.$baby) in \(.applicationName)",
+            "\(\.$baby) ate in \(.applicationName)",
         ], shortTitle: "Log a bottle", systemImageName: "waterbottle.fill")
 
         AppShortcut(intent: LogNursingIntent(), phrases: [
@@ -280,6 +325,7 @@ struct MinaShortcuts: AppShortcutsProvider {
             "Log a \(\.$kind) diaper in \(.applicationName)",
             "\(.applicationName) had a diaper",
             "Log a diaper in \(.applicationName)",
+            "Log a diaper for \(\.$baby) in \(.applicationName)",
         ], shortTitle: "Log a diaper", systemImageName: "drop.fill")
 
         AppShortcut(intent: LogPeeIntent(), phrases: [
@@ -312,6 +358,7 @@ struct MinaShortcuts: AppShortcutsProvider {
             "\(.applicationName) is napping",
             "\(.applicationName) went down",
             "Start sleep in \(.applicationName)",
+            "\(\.$baby) is asleep in \(.applicationName)",
         ], shortTitle: "Start sleep", systemImageName: "moon.zzz.fill")
 
         AppShortcut(intent: EndSleepIntent(), phrases: [
@@ -319,6 +366,7 @@ struct MinaShortcuts: AppShortcutsProvider {
             "\(.applicationName) woke up",
             "\(.applicationName) is up",
             "End sleep in \(.applicationName)",
+            "\(\.$baby) woke up in \(.applicationName)",
         ], shortTitle: "End sleep", systemImageName: "sun.max.fill")
 
         AppShortcut(intent: LogWeightIntent(), phrases: [
@@ -340,6 +388,7 @@ struct MinaShortcuts: AppShortcutsProvider {
             "How much did \(.applicationName) eat \(\.$day)",
             "How did \(.applicationName) sleep \(\.$day)",
             "How was \(.applicationName)'s day \(\.$day)",
+            "When did \(\.$baby) last eat in \(.applicationName)",
         ], shortTitle: "Last feed", systemImageName: "clock.fill")
     }
 }

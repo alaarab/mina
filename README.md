@@ -162,7 +162,12 @@ backend.
 
 ## Siri
 
-The app's name is the trigger, so phrases are natural:
+The app's name is the trigger, and "my baby", "the baby" and "our baby" work as
+alternates, so it reads naturally whatever the child is called. Replies use the
+baby's real name. With more than one baby, phrases log to the selected baby; say
+"log a bottle for Olivia" to name one, or Siri asks "Which baby?"
+
+Phrases:
 
 - "Hey Siri, Mina ate 4 ounces" (also 120 milliliters, and half-ounce steps 1–10)
 - "Mina nursed on the left"

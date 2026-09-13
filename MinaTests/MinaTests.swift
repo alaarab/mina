@@ -485,3 +485,23 @@ final class SpokenFormatTests: XCTestCase {
         XCTAssertEqual(Format.spokenAgo(from: now.addingTimeInterval(-2 * 86_400), to: now), "2 days ago")
     }
 }
+
+
+final class BabyChoiceTests: XCTestCase {
+    func testPerformAsksWhenTwoBabiesAndNoneSelected() async throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let a = try logbook.createBaby(name: "A", birthDate: .now, in: context)
+        _ = try logbook.createBaby(name: "B", birthDate: .now, in: context)
+        Prefs.selectedBabyID = nil
+        do { _ = try await logbook.perform { _, baby in baby.displayName }; XCTFail("should ask") }
+        catch let error as LogbookError { XCTAssertEqual(error.errorDescription, LogbookError.ambiguous.errorDescription) }
+        let named = try await logbook.perform(babyID: a.id) { _, baby in baby.displayName }
+        XCTAssertEqual(named, "A")
+        Prefs.selectedBabyID = a.id
+        let selected = try await logbook.perform { _, baby in baby.displayName }
+        XCTAssertEqual(selected, "A")
+        Prefs.selectedBabyID = nil
+    }
+}
