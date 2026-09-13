@@ -35,16 +35,12 @@ struct BottleSheet: View {
                 HStack(spacing: 28) {
                     StepButton(symbol: "minus") { amount = max(0, amount - unit.step) }
                     VStack(spacing: 0) {
-                        Text(VolumeUnit.trim(amount))
-                            .font(.system(size: 72, weight: .bold, design: .rounded))
-                            .foregroundStyle(MinaTheme.text)
-                            .contentTransition(.numericText())
-                            .animation(.snappy, value: amount)
-                        Text(unit.symbol)
-                            .font(.mina(.title3, weight: .medium))
+                        AmountField(value: $amount, unit: unit)
+                        Text("\(unit.symbol) · tap to type")
+                            .font(.mina(.footnote, weight: .medium))
                             .foregroundStyle(MinaTheme.textMuted)
                     }
-                    .frame(minWidth: 130)
+                    .frame(minWidth: 150)
                     StepButton(symbol: "plus") { amount = min(unit.maximum, amount + unit.step) }
                 }
                 .padding(.top, 12)
@@ -209,6 +205,37 @@ struct NoteSheet: View {
     }
 }
 
+/// The big number in the bottle sheet: type it on the number pad, or use the
+/// buttons either side to nudge it.
+struct AmountField: View {
+    @Binding var value: Double
+    let unit: VolumeUnit
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("0", text: $text)
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.center)
+            .font(.system(size: 64, weight: .bold, design: .rounded))
+            .foregroundStyle(MinaTheme.text)
+            .focused($focused)
+            .onAppear { text = VolumeUnit.trim(value) }
+            .onChange(of: value) { _, new in
+                if Double(text.replacingOccurrences(of: ",", with: ".")) != new { text = VolumeUnit.trim(new) }
+            }
+            .onChange(of: text) { _, new in
+                if let parsed = Double(new.replacingOccurrences(of: ",", with: ".")) { value = min(unit.maximum, max(0, parsed)) }
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focused = false }.fontWeight(.semibold)
+                }
+            }
+    }
+}
+
 struct StepButton: View {
     let symbol: String
     let action: () -> Void
@@ -258,12 +285,28 @@ struct EntryEditor: View {
             Form {
                 Section {
                     DatePicker(draft.kind == .sleep ? "Fell asleep" : "When", selection: $draft.startedAt, displayedComponents: [.date, .hourAndMinute])
+                    HStack(spacing: 8) {
+                        ForEach([-30, -15, -5, 5, 15], id: \.self) { minutes in
+                            Button(minutes > 0 ? "+\(minutes)m" : "\(minutes)m") { draft.startedAt = draft.startedAt.addingTimeInterval(Double(minutes) * 60) }
+                                .buttonStyle(.bordered).tint(MinaTheme.textMuted).font(.mina(.subheadline, weight: .semibold))
+                        }
+                    }
                 }
                 switch draft.kind {
                 case .bottle:
                     Section("Amount") {
-                        Stepper(value: $amountDisplay, in: 0...unit.maximum, step: unit.step) {
-                            Text("\(VolumeUnit.trim(amountDisplay)) \(unit.symbol)").font(.mina(.body, weight: .semibold))
+                        HStack {
+                            TextField("Amount", value: $amountDisplay, format: .number)
+                                .keyboardType(.decimalPad)
+                                .font(.mina(.title2, weight: .semibold))
+                            Text(unit.symbol).foregroundStyle(MinaTheme.textMuted)
+                            Stepper("", value: $amountDisplay, in: 0...unit.maximum, step: unit.step).labelsHidden()
+                        }
+                        HStack(spacing: 8) {
+                            ForEach(unit.quickPicks, id: \.self) { pick in
+                                Button(VolumeUnit.trim(pick)) { amountDisplay = pick }
+                                    .buttonStyle(.bordered).tint(amountDisplay == pick ? MinaTheme.bottle : MinaTheme.textMuted).font(.mina(.subheadline, weight: .semibold))
+                            }
                         }
                     }
                 case .nursing:

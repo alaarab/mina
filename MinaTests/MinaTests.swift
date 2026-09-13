@@ -14,6 +14,9 @@ final class UnitTests: XCTestCase {
         XCTAssertEqual(FeedAmount.oz4.milliliters, 4 * VolumeUnit.millilitersPerOunce, accuracy: 0.001)
         XCTAssertEqual(FeedAmount.oz2_5.milliliters, 2.5 * VolumeUnit.millilitersPerOunce, accuracy: 0.001)
         XCTAssertEqual(FeedAmount.ml120.milliliters, 120)
+        XCTAssertEqual(FeedAmount.ml37.milliliters, 37)
+        XCTAssertEqual(FeedAmount.allCases.count, 19 + 291)
+        XCTAssertEqual(VolumeUnit.milliliters.step, 1)
         for amount in FeedAmount.allCases {
             XCTAssertGreaterThan(amount.milliliters, 0, "\(amount.rawValue) has no volume")
             XCTAssertNotNil(FeedAmount.caseDisplayRepresentations[amount], "\(amount.rawValue) has no spoken form")

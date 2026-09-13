@@ -38,6 +38,9 @@ struct EntryRow: View {
                         .foregroundStyle(MinaTheme.textMuted)
                 }
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MinaTheme.textMuted.opacity(0.7))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
