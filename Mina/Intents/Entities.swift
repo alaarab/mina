@@ -114,12 +114,12 @@ struct DaySummaryEntity: AppEntity, Identifiable {
         wet = summary.wet
         dirty = summary.dirty
         sleepHours = (summary.sleepSeconds / 360).rounded() / 10
-        sleepText = Format.duration(summary.sleepSeconds)
+        sleepText = Format.spokenDuration(summary.sleepSeconds)
         var parts = [Format.count(summary.feeds, "feed")]
         if summary.bottleML > 0 { parts.append("\(unit.format(ml: summary.bottleML)) by bottle") }
         if summary.nursingSeconds > 0 { parts.append("\(Int(summary.nursingSeconds / 60)) minutes nursing") }
         parts.append("\(summary.wet) wet and \(summary.dirty) dirty diapers")
-        parts.append("\(Format.duration(summary.sleepSeconds)) of sleep")
+        parts.append("\(Format.spokenDuration(summary.sleepSeconds)) of sleep")
         spoken = "\(babyName) had " + parts.joined(separator: ", ") + "."
     }
 

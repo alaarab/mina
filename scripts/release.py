@@ -68,6 +68,17 @@ def run(command, **kwargs):
     return subprocess.run(command, cwd=root, check=True, **kwargs)
 
 
+model = root / "Mina/Data/MinaModel.swift"
+if model.exists():
+    stamp = Path("~/.config/ios-release").expanduser() / f"{scheme}.model.sha"
+    import hashlib
+    digest = hashlib.sha256(model.read_bytes()).hexdigest()
+    if stamp.exists() and stamp.read_text().strip() != digest:
+        print("\n!! The Core Data model changed since the last upload. Before testers sync, run the schema helper and\n"
+              "!! deploy Development -> Production in the CloudKit console (see docs/TESTFLIGHT.md).\n", flush=True)
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(digest)
+
 run(["xcodegen", "generate"])
 project = f"{scheme}.xcodeproj"
 settings = [f"CURRENT_PROJECT_VERSION={build_number}", f"DEVELOPMENT_TEAM={config['team']}", "CODE_SIGN_STYLE=Automatic"]

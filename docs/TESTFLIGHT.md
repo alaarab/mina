@@ -50,6 +50,16 @@ scripts/release.py --skip-tests --marketing-version 0.2.0
 Processing takes 10–30 minutes, then testers get the update automatically.
 Builds expire after 90 days.
 
+## When the data model changes
+
+Adding a field to `MinaModel.swift` means CloudKit's Production schema needs it
+before any TestFlight phone can sync that field. `release.py` prints a warning
+when the model file changed since the last upload. The steps: build the app
+with the bundle id suffix `.recovery` (it calls `initializeCloudKitSchema` on
+launch and writes `Documents/schema.txt`), run it once on a phone signed in to
+the developer's iCloud, then Deploy Schema Changes in the CloudKit console.
+Symptom if skipped: "Export failed · CKErrorDomain 2" in Settings → Sharing.
+
 ## Mina-specific: CloudKit production
 
 TestFlight builds use the **production** CloudKit environment. Before the first
