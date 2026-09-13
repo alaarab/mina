@@ -22,7 +22,10 @@ WIDGETS THAT DO THINGS
 Home Screen buttons for the last bottle amount, pee, poop and sleep. Lock-screen glances for time since the last feed.
 
 KNOWS WHAT'S NEXT
-Mina learns her feeding rhythm and shows the next feed before she asks for it, plus the nap window for her age. Turn on the feed alarm and it rings through silent mode, then logs the feed from the lock screen.
+Mina learns her feeding rhythm and shows the next feed before she asks for it, plus the nap window for her age. Turn on the feed alarm and it rings through silent mode and re-arms itself after every feed. Stopping it never logs a feed; the app asks “Did she eat?” instead.
+
+WHO'S ON TONIGHT
+Tap “I'm on” and only your phone rings the alarm and gets the alerts. Hand off with one tap, or set a nightly schedule that both phones follow. Any number of caregivers can be on the share.
 
 LOOK BACK ON ANYTHING
 A month calendar, a searchable history of every entry, and two weeks of charts: ounces, sleep, longest stretch, diapers. One tap makes a PDF for the pediatrician.
