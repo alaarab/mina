@@ -39,6 +39,8 @@ targets:
         CKSharingSupported: true
         NSSpeechRecognitionUsageDescription: Mina turns your voice into a typed question, on the phone only.
         NSMicrophoneUsageDescription: Mina listens while you dictate a question in Ask.
+        NSAlarmKitUsageDescription: Mina rings a real alarm when the next feed is due, so it gets through silent mode at night.
+        NSSupportsLiveActivities: true
         INAlternativeAppNames:
           - INAlternativeAppName: Mina log
           - INAlternativeAppName: Mina app
@@ -108,6 +110,7 @@ targets:
       - path: Mina/Data/Summary.swift
       - path: Mina/App/Preferences.swift
       - path: Mina/Design/Theme.swift
+      - path: Mina/Features/Alarm/FeedAlarmMetadata.swift
     info:
       path: MinaWidgets/Info.plist
       properties:
@@ -168,6 +171,8 @@ targets:
         CKSharingSupported: true
         NSSpeechRecognitionUsageDescription: Mina turns your voice into a typed question, on the phone only.
         NSMicrophoneUsageDescription: Mina listens while you dictate a question in Ask.
+        NSAlarmKitUsageDescription: Mina rings a real alarm when the next feed is due, so it gets through silent mode at night.
+        NSSupportsLiveActivities: true
         INAlternativeAppNames:
           - INAlternativeAppName: Mina log
           - INAlternativeAppName: Mina app
@@ -237,6 +242,7 @@ targets:
       - path: Mina/Data/Summary.swift
       - path: Mina/App/Preferences.swift
       - path: Mina/Design/Theme.swift
+      - path: Mina/Features/Alarm/FeedAlarmMetadata.swift
     info:
       path: MinaWidgets/Info.plist
       properties:

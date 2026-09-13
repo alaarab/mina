@@ -1,3 +1,4 @@
+import CloudKit
 import CoreData
 import UIKit
 import UserNotifications
@@ -29,6 +30,40 @@ final class PartnerAlerts {
             self?.queue.async { self?.processHistory() }
         }
     }
+
+    private static let subscriptionKey = "partner.cloudSubscription.v1"
+
+    /// On the owner's phone, a CloudKit subscription delivers a visible push
+    /// for entries created by other devices even when Mina is force-quit.
+    /// (Apple doesn't offer query subscriptions in the shared database, so the
+    /// partner's phone keeps the silent-push path.)
+    func registerCloudSubscriptionIfOwner(babyName: String, isOwner: Bool) {
+        guard isOwner, !Prefs.defaults.bool(forKey: Self.subscriptionKey) else { return }
+        Task {
+            let container = CKContainer(identifier: PersistenceController.cloudContainerIdentifier)
+            guard (try? await container.accountStatus()) == .available else { return }
+            let zone = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
+            let subscription = CKQuerySubscription(recordType: "CD_LogEntry",
+                                                   predicate: NSPredicate(format: "CD_deviceID != %@", Prefs.deviceID),
+                                                   subscriptionID: "partner-entries-v1", options: [.firesOnRecordCreation])
+            subscription.zoneID = zone
+            let info = CKSubscription.NotificationInfo()
+            info.title = "Mina"
+            info.alertBody = "Your partner just logged something for \(babyName)."
+            info.soundName = "default"
+            info.shouldSendContentAvailable = true
+            subscription.notificationInfo = info
+            do {
+                _ = try await container.privateCloudDatabase.save(subscription)
+                Prefs.defaults.set(true, forKey: Self.subscriptionKey)
+            } catch {
+                NSLog("partner subscription: \(error)")
+            }
+        }
+    }
+
+    /// True once the server-side subscription exists, so the local copy stays quiet.
+    static var usesCloudSubscription: Bool { Prefs.defaults.bool(forKey: subscriptionKey) }
 
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
@@ -72,7 +107,7 @@ final class PartnerAlerts {
                     if change.changedObjectID.entity.name == "LogEntry" { inserted.append(change.changedObjectID) }
                 }
             }
-            guard !inserted.isEmpty, Prefs.partnerAlerts else { return }
+            guard !inserted.isEmpty, Prefs.partnerAlerts, !Self.usesCloudSubscription else { return }
 
             let cutoff = Date.now.addingTimeInterval(-6 * 3600)
             var entries: [LogEntry] = []

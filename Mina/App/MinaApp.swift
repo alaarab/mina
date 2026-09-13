@@ -105,6 +105,11 @@ struct RootView: View {
         Group {
             if let baby = persistence.preferredBaby(from: Array(babies)) {
                 MainTabs(baby: baby).id(baby.objectID)
+                    .task {
+                        if ShareManager.shared.existingShare(for: baby) != nil {
+                            PartnerAlerts.shared.registerCloudSubscriptionIfOwner(babyName: baby.displayName, isOwner: !persistence.isShared(baby))
+                        }
+                    }
             } else {
                 OnboardingView()
             }

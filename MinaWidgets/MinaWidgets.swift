@@ -258,5 +258,8 @@ struct MinaWidgetBundle: WidgetBundle {
     var body: some Widget {
         MinaQuickLogWidget()
         MinaStatusWidget()
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) { FeedAlarmActivity() }
+        #endif
     }
 }
