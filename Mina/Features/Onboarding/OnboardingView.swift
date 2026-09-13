@@ -43,16 +43,21 @@ struct OnboardingView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
 
-                    VStack(spacing: 6) {
-                        Text("Got an invite?")
-                            .font(.mina(.headline))
-                        Text("Open the link your partner sent in Messages. The app opens with the shared log, so there's no need to create a second one here.")
-                            .font(.mina(.footnote))
-                            .foregroundStyle(MinaTheme.textMuted)
-                            .multilineTextAlignment(.center)
-                        Text(sync.statusText)
-                            .font(.mina(.caption2))
-                            .foregroundStyle(MinaTheme.textMuted)
+                    HStack(spacing: 14) {
+                        Image(systemName: "envelope.open.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(MinaTheme.accent)
+                            .frame(width: 44, height: 44)
+                            .background(MinaTheme.cardTint, in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Got an invite?")
+                                .font(.mina(.headline))
+                            Text("Open the link from Messages and the shared log appears.")
+                                .font(.mina(.footnote))
+                                .foregroundStyle(MinaTheme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
                     }
                     .minaCard()
                 }
