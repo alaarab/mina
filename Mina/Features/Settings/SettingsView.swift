@@ -1,6 +1,7 @@
 import AppIntents
 import CloudKit
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 /// Everything with a switch on it: her name and birthday, the iCloud share with
@@ -25,6 +26,9 @@ struct SettingsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @ObservedObject private var nanit = NanitSync.shared
     @State private var linkingNanit = false
+    @State private var exportURL: URL?
+    @State private var importing = false
+    @State private var backupMessage: String?
 
     private let persistence = PersistenceController.shared
 
@@ -151,6 +155,19 @@ struct SettingsView: View {
                     Text("Say “Hey Siri” and any of these. No setup needed. The app's name is the trigger word; “Mina log”, “Mina app” and “the baby” work too if Siri mishears.")
                 }
 
+                Section {
+                    if let exportURL {
+                        ShareLink(item: exportURL, subject: Text("\(baby.displayName)'s log")) { Label("Share the export file", systemImage: "square.and.arrow.up") }
+                    }
+                    Button { export() } label: { Label("Export everything to a file", systemImage: "arrow.up.doc") }
+                    Button { importing = true } label: { Label("Import from a file", systemImage: "arrow.down.doc") }
+                    if let backupMessage { Text(backupMessage).font(.mina(.footnote)).foregroundStyle(MinaTheme.textSecondary) }
+                } header: {
+                    Text("Backup")
+                } footer: {
+                    Text("A plain JSON file with every entry. Importing adds only entries that aren't already in the log, so it's safe to import the same file twice or a file from another phone.")
+                }
+
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     if let loadError = persistence.loadError {
@@ -162,6 +179,15 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .minaCanvas()
             .sheet(isPresented: $linkingNanit) { NanitLinkSheet() }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
+                do {
+                    guard let url = try result.get().first else { return }
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    let added = try Backup.importData(try Data(contentsOf: url), into: baby, in: context)
+                    backupMessage = added == 0 ? "Nothing new in that file." : "Imported \(added) \(added == 1 ? "entry" : "entries")."
+                } catch { backupMessage = "Import failed: \(error.localizedDescription)" }
+            }
             .sheet(item: $sharing.item) { item in
                 CloudSharingView(share: item.share, container: sharing.cloudContainer, title: "\(baby.displayName)'s log")
                     .ignoresSafeArea()
@@ -175,6 +201,16 @@ struct SettingsView: View {
     }
 
     // MARK: Subviews
+
+    private func export() {
+        do {
+            let data = try Backup.exportData(baby: baby, in: context)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(baby.displayName)-log.json")
+            try data.write(to: url, options: .atomic)
+            exportURL = url
+            backupMessage = "Ready to share: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))."
+        } catch { backupMessage = "Export failed: \(error.localizedDescription)" }
+    }
 
     private func siriPhrase(_ text: String) -> some View {
         HStack(spacing: 8) {
