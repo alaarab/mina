@@ -27,6 +27,18 @@ struct MinaApp: App {
     /// development-environment log down and write it where it can be copied off.
     private static func startRecoveryExportIfNeeded(persistence: PersistenceController) {
         guard Bundle.main.bundleIdentifier?.hasSuffix(".recovery") == true else { return }
+        // Write the complete record schema (every entity and field) into the
+        // Development environment, so it can be deployed to Production whole.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+            let report: String
+            do {
+                try persistence.container.initializeCloudKitSchema(options: [])
+                report = "schema initialized \(Date.now)"
+            } catch {
+                report = "schema failed: \(error)"
+            }
+            try? report.write(to: Backup.autoExportURL.deletingLastPathComponent().appendingPathComponent("schema.txt"), atomically: true, encoding: .utf8)
+        }
         Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
             let context = persistence.container.viewContext
             context.perform {

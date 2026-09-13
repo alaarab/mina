@@ -220,8 +220,7 @@ final class SyncMonitor: ObservableObject {
         if let error = event.error {
             let nsError = error as NSError
             var lines = ["\(nsError.domain) \(nsError.code): \(nsError.localizedDescription)"]
-            if let partial = nsError.userInfo[NSDetailedErrorsKey] as? [NSError] { lines += partial.prefix(5).map { "\($0.code): \($0.localizedDescription)" } }
-            if let partial = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: NSError] { lines += partial.values.prefix(5).map { "\($0.code): \($0.localizedDescription)" } }
+            lines += Self.nestedErrors(in: nsError).prefix(6)
             lastError = "\(name): \(nsError.localizedDescription)"
             steps[name] = "failed \(Format.time(endDate))"
             details[name] = lines.joined(separator: "\n")
@@ -231,6 +230,25 @@ final class SyncMonitor: ObservableObject {
             steps[name] = "ok \(Format.time(endDate))"
             details[name] = nil
         }
+    }
+
+    /// CloudKit buries the useful message two levels down; dig it out.
+    static func nestedErrors(in error: NSError, depth: Int = 0) -> [String] {
+        guard depth < 3 else { return [] }
+        var found: [String] = []
+        func describe(_ any: Any) {
+            guard let nested = any as? NSError else { return }
+            var text = "\(nested.domain) \(nested.code): \(nested.localizedDescription)"
+            if let reason = nested.userInfo[NSLocalizedFailureReasonErrorKey] as? String { text += " — \(reason)" }
+            if let server = nested.userInfo["ServerErrorDescription"] as? String { text += " — \(server)" }
+            found.append(text)
+            found += nestedErrors(in: nested, depth: depth + 1)
+        }
+        if let partial = error.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Any] { partial.values.prefix(6).forEach(describe) }
+        if let detailed = error.userInfo[NSDetailedErrorsKey] as? [Any] { detailed.prefix(6).forEach(describe) }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] { describe(underlying) }
+        if let server = error.userInfo["ServerErrorDescription"] as? String { found.append(server) }
+        return found
     }
 
     /// One line per store, only for stores that have reported anything.
