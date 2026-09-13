@@ -82,14 +82,48 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
 }
 
 struct RootView: View {
+    @Environment(\.managedObjectContext) private var context
     @FetchRequest(fetchRequest: Baby.request(), animation: .default) private var babies: FetchedResults<Baby>
+    @AppStorage(Prefs.selectedBabyKey, store: Prefs.defaults) private var selectedBabyID = ""
+    @State private var mergeCandidate: Baby?
+    @State private var mergeResult: String?
 
     var body: some View {
-        if let baby = PersistenceController.shared.preferredBaby(from: Array(babies)) {
-            MainTabs(baby: baby).id(baby.objectID)
-        } else {
-            OnboardingView()
+        let persistence = PersistenceController.shared
+        Group {
+            if let baby = persistence.preferredBaby(from: Array(babies)) {
+                MainTabs(baby: baby).id(baby.objectID)
+            } else {
+                OnboardingView()
+            }
         }
+        .onChange(of: babies.count, initial: true) { _, _ in offerMergeIfNeeded() }
+        .alert("Merge your log?", isPresented: Binding(get: { mergeCandidate != nil }, set: { if !$0 { mergeCandidate = nil } }), presenting: mergeCandidate) { local in
+            Button("Merge into the shared log") { merge(local) }
+            Button("Keep both", role: .cancel) { Prefs.defaults.set(true, forKey: "merge.declined.\(local.id?.uuidString ?? "")") }
+        } message: { local in
+            let count = Logbook.shared.entries(for: local, from: .distantPast, in: context).count
+            Text("You already had a log for \(local.displayName) with \(count) \(count == 1 ? "entry" : "entries") on this phone. Move them into the log your partner shared? Your own copy is removed afterwards.")
+        }
+        .errorAlert(Binding(get: { mergeResult }, set: { mergeResult = $0 }), title: "Merged")
+    }
+
+    /// After accepting a share: a local baby with the same name as the shared one is almost certainly the same child.
+    private func offerMergeIfNeeded() {
+        let persistence = PersistenceController.shared
+        guard mergeCandidate == nil,
+              let shared = babies.first(where: { persistence.isShared($0) }),
+              let local = babies.first(where: { !persistence.isShared($0) && $0.displayName.lowercased() == shared.displayName.lowercased() }),
+              !Prefs.defaults.bool(forKey: "merge.declined.\(local.id?.uuidString ?? "")") else { return }
+        mergeCandidate = local
+    }
+
+    private func merge(_ local: Baby) {
+        guard let shared = babies.first(where: { PersistenceController.shared.isShared($0) }) else { return }
+        do {
+            let moved = try Logbook.shared.merge(local, into: shared, in: context)
+            mergeResult = "\(moved) \(moved == 1 ? "entry" : "entries") moved into the shared log."
+        } catch { mergeResult = "Couldn't merge: \(error.localizedDescription)" }
     }
 }
 

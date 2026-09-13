@@ -425,3 +425,26 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(entries.first { $0.kind == .growth }?.weightGrams, 3400)
     }
 }
+
+
+final class MultipleBabiesTests: XCTestCase {
+    func testSelectionAndMerge() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let first = try logbook.createBaby(name: "First", birthDate: .now, in: context)
+        let second = try logbook.createBaby(name: "Second", birthDate: .now, in: context)
+        Prefs.selectedBabyID = nil
+        XCTAssertEqual(persistence.preferredBaby(from: [first, second]), first)
+        Prefs.selectedBabyID = second.id
+        XCTAssertEqual(persistence.preferredBaby(from: [first, second]), second)
+        Prefs.selectedBabyID = nil
+
+        var bottle = EntryDraft(kind: .bottle); bottle.amountML = 90
+        try logbook.add(bottle, to: first, in: context)
+        try logbook.add(EntryDraft(kind: .diaper), to: first, in: context)
+        XCTAssertEqual(try logbook.merge(first, into: second, in: context), 2)
+        XCTAssertEqual(try context.fetch(Baby.request()).count, 1)
+        XCTAssertEqual(logbook.entries(for: second, from: .distantPast, in: context).count, 2)
+    }
+}

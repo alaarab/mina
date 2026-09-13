@@ -83,6 +83,21 @@ about her log ("is she eating enough for her age?", "how did she sleep this
 week?") using Apple's on-device Foundation Models on iOS 26 with Apple
 Intelligence. It sees her age, the stage guidance, two weeks of totals and the
 latest entries; nothing leaves the phone. Follow-up questions keep context.
+Tap the mic to dictate (on-device speech recognition only) and the speaker to
+have answers read aloud; with the speaker on, a dictated question sends itself,
+so it works hands-free.
+
+## More than one baby
+
+Settings → Baby → Add another baby. Each baby has its own log and its own
+sharing; a picker appears when there's more than one. If you accept a share
+after starting a log with the same name on your own phone, Mina offers to
+merge your entries into the shared log.
+
+## Backup
+
+Settings → Backup exports every entry as a JSON file (share it anywhere) and
+imports one back, adding only entries that aren't already there.
 
 ## Predictions, trends, milestones
 

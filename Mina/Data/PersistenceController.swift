@@ -136,6 +136,7 @@ final class PersistenceController {
     /// A baby someone shared with you wins over one you created locally, so
     /// accepting an invite switches the whole app to the shared log.
     func preferredBaby(from babies: [Baby]) -> Baby? {
-        babies.first(where: isShared) ?? babies.first
+        if let selected = Prefs.selectedBabyID, let chosen = babies.first(where: { $0.id == selected }) { return chosen }
+        return babies.first(where: isShared) ?? babies.first
     }
 }

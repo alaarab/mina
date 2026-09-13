@@ -285,6 +285,27 @@ final class Logbook: @unchecked Sendable {
         return (try? context.fetch(request).first)?.endedAt
     }
 
+    /// Moves every entry of `local` into `target` (a shared baby) and deletes
+    /// `local`. Used when someone accepts a share after starting their own log.
+    @discardableResult
+    func merge(_ local: Baby, into target: Baby, in context: NSManagedObjectContext) throws -> Int {
+        guard local != target else { return 0 }
+        let entries = self.entries(for: local, from: .distantPast, in: context)
+        for entry in entries {
+            var draft = EntryDraft(entry: entry)
+            draft.loggedBy = entry.loggedBy ?? ""
+            let copy = try add(draft, to: target, in: context, save: false)
+            copy.id = entry.id
+            copy.createdAt = entry.createdAt
+        }
+        if target.birthDate == nil { target.birthDate = local.birthDate }
+        context.delete(local)
+        try context.save()
+        if Prefs.selectedBabyID == local.id { Prefs.selectedBabyID = nil }
+        Self.widgetsChanged()
+        return entries.count
+    }
+
     // MARK: Background work (Siri)
 
     /// Runs `work` on a fresh background context with the current baby.

@@ -37,6 +37,8 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSRequiresIPhoneOS: true
         CKSharingSupported: true
+        NSSpeechRecognitionUsageDescription: Mina turns your voice into a typed question, on the phone only.
+        NSMicrophoneUsageDescription: Mina listens while you dictate a question in Ask.
         INAlternativeAppNames:
           - INAlternativeAppName: Mina log
           - INAlternativeAppName: Mina app
@@ -164,6 +166,8 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSRequiresIPhoneOS: true
         CKSharingSupported: true
+        NSSpeechRecognitionUsageDescription: Mina turns your voice into a typed question, on the phone only.
+        NSMicrophoneUsageDescription: Mina listens while you dictate a question in Ask.
         INAlternativeAppNames:
           - INAlternativeAppName: Mina log
           - INAlternativeAppName: Mina app
