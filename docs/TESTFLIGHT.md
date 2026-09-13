@@ -52,3 +52,12 @@ Development to Production. Do this again after any change to the Core Data model
 Data logged in a development (Xcode) build lives in the development
 environment and will not appear in a TestFlight build. Move everyone to
 TestFlight at the same time, then share the log again from the TestFlight app.
+
+## App Store
+
+The listing copy lives in `docs/store/listing.md`; `scripts/asc-fill.py` pushes it
+(description, keywords, promo text, URLs, subtitle, categories, copyright) to the
+current App Store version through the API. Screenshots are composed from simulator
+captures (`-seed-demo`) at 1320×2868 with a caption band; the preview is cut from
+the tour recording at 886×1920. Things the API won't set: the review contact phone,
+the App Privacy questionnaire ("Data Not Collected"), pricing, and the Submit button.
