@@ -99,6 +99,25 @@ enum Format {
         return rest == 0 ? "\(hours)h" : "\(hours)h \(rest)m"
     }
 
+    /// "1 hour 20 minutes", "45 minutes", "under a minute": full words for Siri.
+    static func spokenDuration(_ seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded(.down))
+        if minutes < 1 { return "under a minute" }
+        let hours = minutes / 60, rest = minutes % 60
+        var parts: [String] = []
+        if hours > 0 { parts.append(count(hours, "hour")) }
+        if rest > 0 { parts.append(count(rest, "minute")) }
+        return parts.joined(separator: " ")
+    }
+
+    /// "just now", "12 minutes ago", "2 days ago": full words for Siri.
+    static func spokenAgo(from date: Date, to now: Date = .now) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 60 { return "just now" }
+        if seconds < 86_400 { return spokenDuration(seconds) + " ago" }
+        return count(Int(seconds / 86_400), "day") + " ago"
+    }
+
     /// "just now", "12m ago", "1h 20m ago", "2d ago".
     static func ago(from date: Date, to now: Date = .now) -> String {
         let seconds = now.timeIntervalSince(date)

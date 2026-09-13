@@ -161,7 +161,7 @@ struct StartSleepIntent: AppIntent {
             return (baby.displayName, nil)
         }
         if let ongoingSince {
-            return .result(dialog: "\(name) has already been asleep for \(Format.duration(Date.now.timeIntervalSince(ongoingSince))).")
+            return .result(dialog: "\(name) has already been asleep for \(Format.spokenDuration(Date.now.timeIntervalSince(ongoingSince))).")
         }
         return .result(dialog: "\(name)'s sleep started at \(Format.time(.now)).")
     }
@@ -178,7 +178,7 @@ struct EndSleepIntent: AppIntent {
             return (baby.displayName, ended?.duration())
         }
         guard let slept else { return .result(dialog: "\(name) wasn't marked as asleep.") }
-        return .result(dialog: "\(name) is up. She slept \(Format.duration(slept)).")
+        return .result(dialog: "\(name) is up. She slept \(Format.spokenDuration(slept)).")
     }
 }
 
@@ -229,7 +229,7 @@ struct FeedStatusIntent: AppIntent {
         let unit = Prefs.unit
         var text: String
         if let last {
-            text = "\(name) last ate \(Format.ago(from: last.startedAt, to: now))"
+            text = "\(name) last ate \(Format.spokenAgo(from: last.startedAt, to: now))"
             if last.kind == .bottle, last.amountML > 0 { text += ", a \(unit.format(ml: last.amountML)) bottle" }
             else if last.kind == .nursing { text += ", nursing" + (last.side.map { " on the \($0.title.lowercased())" } ?? "") }
             text += " at \(Format.time(last.startedAt))."
@@ -242,7 +242,7 @@ struct FeedStatusIntent: AppIntent {
             // Pluralised on the day's total, not the dirty count: "1 wet and 0 dirty diaper".
             text += ", \(summary.wet) wet and \(summary.dirty) dirty \(summary.diapers == 1 ? "diaper" : "diapers")."
         }
-        if let lastPoop { text += " Last poop \(Format.ago(from: lastPoop, to: now))." }
+        if let lastPoop { text += " Last poop \(Format.spokenAgo(from: lastPoop, to: now))." }
         return .result(dialog: "\(text)")
     }
 }

@@ -472,3 +472,16 @@ final class ShiftTests: XCTestCase {
         XCTAssertFalse(Shifts.thisPhoneIsOn(for: baby, at: at(4)))
     }
 }
+
+
+final class SpokenFormatTests: XCTestCase {
+    func testSiriHearsWordsNotAbbreviations() {
+        XCTAssertEqual(Format.spokenDuration(15 * 60), "15 minutes")
+        XCTAssertEqual(Format.spokenDuration(60 * 60), "1 hour")
+        XCTAssertEqual(Format.spokenDuration(80 * 60), "1 hour 20 minutes")
+        XCTAssertEqual(Format.spokenDuration(30), "under a minute")
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        XCTAssertEqual(Format.spokenAgo(from: now.addingTimeInterval(-12 * 60), to: now), "12 minutes ago")
+        XCTAssertEqual(Format.spokenAgo(from: now.addingTimeInterval(-2 * 86_400), to: now), "2 days ago")
+    }
+}
