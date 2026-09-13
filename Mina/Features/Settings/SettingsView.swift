@@ -156,6 +156,7 @@ struct SettingsView: View {
                     Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. Feed reminders are a normal notification at her predicted next feed. The feed alarm is a real alarm that rings through silent mode and Focus, moves itself every time a feed is logged, and its Log feed button records a bottle at the last amount.")
                 }
 
+                if FeatureFlags.nanit {
                 Section {
                     if let camera = nanit.baby {
                         Label("Connected to \(camera.name)'s camera", systemImage: "video.fill")
@@ -176,6 +177,7 @@ struct SettingsView: View {
                     Text("Nanit")
                 } footer: {
                     Text("Sleep and wake events from the camera become sleep entries, logged as “Nanit”, when the app opens and in the background every so often. Unofficial: Nanit has no public API, so this can stop working if they change things.")
+                }
                 }
 
                 Section {
