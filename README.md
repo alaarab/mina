@@ -67,6 +67,18 @@ inches and °F; milliliters means kg, cm and °C.
 Every entry can be opened from any list to fix the amount, the time (with
 ±5/15/30 minute nudges), the side, or delete it.
 
+## Feed alarm and partner pushes
+
+Settings → Notifications → **Feed alarm** turns on a real alarm (iOS 26's Alarm
+framework): it rings through silent mode and Focus, moves itself to last feed +
+your chosen gap (or her predicted next feed) every time a feed is logged, and
+its **Log feed** button records a bottle at the last amount from the lock
+screen. Snooze is 10 minutes. Older iOS keeps the plain notification reminder.
+
+Partner alerts on the log owner's phone use a CloudKit subscription, so they
+arrive even when Mina has been force-quit. The partner's phone gets them
+through the silent push while the app is in the background.
+
 ## Looking back
 
 - **Calendar**: a month of colored dots; tap a day for its totals and entries.

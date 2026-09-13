@@ -23,6 +23,8 @@ struct SettingsView: View {
     @State private var preparingShare = false
     @AppStorage(Prefs.partnerAlertsKey, store: Prefs.defaults) private var partnerAlerts = true
     @AppStorage(Reminders.feedKey, store: Prefs.defaults) private var feedReminders = false
+    @AppStorage(FeedAlarm.onKey, store: Prefs.defaults) private var feedAlarm = false
+    @AppStorage(FeedAlarm.gapKey, store: Prefs.defaults) private var feedAlarmGap = 180
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @ObservedObject private var nanit = NanitSync.shared
     @State private var linkingNanit = false
@@ -122,6 +124,26 @@ struct SettingsView: View {
                         .onChange(of: feedReminders) { _, on in
                             if !on { Reminders.scheduleFeed(nil, babyName: baby.displayName) }
                         }
+                    if FeedAlarm.isSupported {
+                        Toggle("Feed alarm (rings through silent)", isOn: $feedAlarm)
+                            .onChange(of: feedAlarm) { _, on in
+                                if on {
+                                    let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
+                                    let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+                                    FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
+                                } else { FeedAlarm.cancel() }
+                            }
+                        if feedAlarm {
+                            Picker("Ring after", selection: $feedAlarmGap) {
+                                ForEach(FeedAlarm.gaps, id: \.minutes) { Text($0.title).tag($0.minutes) }
+                            }
+                            .onChange(of: feedAlarmGap) { _, _ in
+                                let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
+                                let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+                                FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
+                            }
+                        }
+                    }
                     if notificationStatus == .denied {
                         Button("Notifications are off for Mina. Open Settings") {
                             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -131,7 +153,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. Feed reminders fire at her predicted next feed, learned from her last few feeds.")
+                    Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. Feed reminders are a normal notification at her predicted next feed. The feed alarm is a real alarm that rings through silent mode and Focus, moves itself every time a feed is logged, and its Log feed button records a bottle at the last amount.")
                 }
 
                 Section {
@@ -231,6 +253,9 @@ struct SettingsView: View {
             }
             .errorAlert($sharing.error, title: "Sharing problem")
             .task {
+                if sharing.existingShare(for: baby) != nil {
+                    PartnerAlerts.shared.registerCloudSubscriptionIfOwner(babyName: baby.displayName, isOwner: !persistence.isShared(baby))
+                }
                 await sync.refreshAccount()
                 notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
             }

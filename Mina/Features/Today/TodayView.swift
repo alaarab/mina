@@ -92,8 +92,8 @@ private struct TodayContent: View {
             }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
             .errorAlert($error)
-            .onAppear { Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now) }
-            .onChange(of: entries.count) { _, _ in Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now) }
+            .onAppear { scheduleFeedAlerts() }
+            .onChange(of: entries.count) { _, _ in scheduleFeedAlerts() }
         }
     }
 
@@ -361,6 +361,11 @@ private struct TodayContent: View {
     }
 
     // MARK: Actions
+
+    private func scheduleFeedAlerts() {
+        Reminders.scheduleFeed(feedPrediction, babyName: baby.displayName, now: now)
+        FeedAlarm.reschedule(lastFeed: lastFeed?.startedAt, prediction: feedPrediction, babyName: baby.displayName, now: now)
+    }
 
     private func log(_ draft: EntryDraft) {
         do {
