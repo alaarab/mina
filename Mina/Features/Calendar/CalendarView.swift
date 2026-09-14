@@ -40,6 +40,7 @@ struct CalendarView: View {
     @State private var selected = Calendar.current.startOfDay(for: .now)
     @State private var showingHistory = DebugLaunch.argument("-open") == "history"
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var calendar: Calendar { .current }
 
@@ -75,13 +76,14 @@ struct CalendarView: View {
     private var monthHeader: some View {
         HStack {
             Button { shift(-1) } label: {
-                Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold)).frame(width: 40, height: 40)
+                Image(systemName: "chevron.left").font(.callout.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
             }
+            .accessibilityLabel("Previous month")
             Spacer()
             Menu {
                 ForEach(recentMonths, id: \.self) { candidate in
                     Button(candidate.formatted(.dateTime.month(.wide).year())) {
-                        withAnimation(.snappy) { month = candidate; selected = candidate }
+                        withAnimation(reduceMotion ? nil : .snappy) { month = candidate; selected = candidate }
                     }
                 }
             } label: {
@@ -89,13 +91,17 @@ struct CalendarView: View {
                     Text(month.formatted(.dateTime.month(.wide).year()))
                         .font(.mina(.title3, weight: .bold))
                         .foregroundStyle(MinaTheme.text)
-                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(MinaTheme.textMuted)
+                    Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(MinaTheme.textMuted).accessibilityHidden(true)
                 }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .accessibilityHint("Jumps to another month")
             Spacer()
             Button { shift(1) } label: {
-                Image(systemName: "chevron.right").font(.system(size: 16, weight: .semibold)).frame(width: 40, height: 40)
+                Image(systemName: "chevron.right").font(.callout.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
             }
+            .accessibilityLabel("Next month")
             .disabled(calendar.compare(month, to: .now, toGranularity: .month) != .orderedAscending)
         }
         .padding(.top, 4)
@@ -111,7 +117,7 @@ struct CalendarView: View {
 
     private func shift(_ months: Int) {
         guard let next = calendar.date(byAdding: .month, value: months, to: month) else { return }
-        withAnimation(.snappy) {
+        withAnimation(reduceMotion ? nil : .snappy) {
             month = next
             if let interval = calendar.dateInterval(of: .month, for: next) {
                 let today = calendar.startOfDay(for: .now)
@@ -121,7 +127,7 @@ struct CalendarView: View {
     }
 
     private func jumpToToday() {
-        withAnimation(.snappy) {
+        withAnimation(reduceMotion ? nil : .snappy) {
             month = calendar.dateInterval(of: .month, for: .now)?.start ?? .now
             selected = calendar.startOfDay(for: .now)
         }
@@ -139,6 +145,7 @@ private struct MonthSection<Header: View>: View {
     let header: Header
 
     @Environment(\.managedObjectContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StoredVolumeUnit private var unit
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var editing: LogEntry?
@@ -194,12 +201,16 @@ private struct MonthSection<Header: View>: View {
                 Text(symbol)
                     .font(.mina(.caption2, weight: .semibold))
                     .foregroundStyle(MinaTheme.textMuted)
-                    .frame(height: 20)
+                    .frame(minHeight: 20)
+                    .accessibilityHidden(true)
             }
             ForEach(Array(MonthGrid.cells(for: month).enumerated()), id: \.offset) { _, day in
                 if let day {
-                    DayCell(day: day, entries: byDay[day] ?? [], isSelected: day == selected, isToday: day == today, isFuture: day > today)
-                        .onTapGesture { withAnimation(.snappy) { selected = day } }
+                    let dayEntries = byDay[day] ?? []
+                    DayCell(day: day, entries: dayEntries, isSelected: day == selected, isToday: day == today, isFuture: day > today)
+                        .onTapGesture { withAnimation(reduceMotion ? nil : .snappy) { selected = day } }
+                        .accessibilityLabel(Spoken.day(day, summary: dayEntries.isEmpty ? nil : DaySummary(entries: dayEntries, day: day, now: now), isToday: day == today))
+                        .accessibilityAddTraits(day == selected ? [.isButton, .isSelected] : .isButton)
                 } else {
                     Color.clear.frame(height: 54)
                 }
@@ -219,16 +230,18 @@ private struct MonthSection<Header: View>: View {
             Text(Format.dayTitle(selected, now: now) + (calendar.isDate(selected, inSameDayAs: now) ? "" : ", " + selected.formatted(.dateTime.year())))
                 .font(.mina(.headline))
                 .padding(.horizontal, 4)
-            HStack(spacing: 10) {
-                SummaryPill(symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle,
+            StatTiles {
+                SummaryPill(title: "Feeds", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle,
                             text: Format.count(summary.feeds, "feed") + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
-                SummaryPill(symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper, text: "\(summary.wet) wet · \(summary.dirty) dirty")
-                SummaryPill(symbol: EntryKind.sleep.symbol, color: MinaTheme.sleep, text: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "no sleep logged")
+                SummaryPill(title: "Diapers", symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper, text: "\(summary.wet) wet · \(summary.dirty) dirty")
+                SummaryPill(title: "Sleep", symbol: EntryKind.sleep.symbol, color: MinaTheme.sleep, text: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "no sleep logged")
             }
             if sorted.isEmpty {
-                Text("Nothing logged this day.")
+                Text(calendar.isDate(selected, inSameDayAs: now) ? "Nothing logged yet today. Her first feed goes in from the Today tab."
+                     : selected > now ? "That day hasn't come yet." : "Nothing was logged this day.")
                     .font(.mina(.subheadline))
-                    .foregroundStyle(MinaTheme.textMuted)
+                    .foregroundStyle(MinaTheme.textSecondary)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
                     .minaCard()
@@ -249,6 +262,9 @@ private struct DayCell: View {
     let isSelected: Bool
     let isToday: Bool
     let isFuture: Bool
+    /// Grows with the text but stays inside a seventh of the grid.
+    @ScaledMetric(relativeTo: .callout) private var scaledCircle = 34.0
+    private var circle: CGFloat { min(scaledCircle, 44) }
 
     private var kinds: [Color] {
         var colors: [Color] = []
@@ -263,8 +279,10 @@ private struct DayCell: View {
         VStack(spacing: 4) {
             Text("\(Calendar.current.component(.day, from: day))")
                 .font(.mina(.callout, weight: isSelected || isToday ? .bold : .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
                 .foregroundStyle(isSelected ? .white : (isFuture ? MinaTheme.textMuted : MinaTheme.text))
-                .frame(width: 34, height: 34)
+                .frame(width: circle, height: circle)
                 .background(isSelected ? MinaTheme.accent : .clear, in: Circle())
                 .overlay(Circle().strokeBorder(isToday && !isSelected ? MinaTheme.accent : .clear, lineWidth: 1.5))
             HStack(spacing: 3) {
@@ -275,20 +293,21 @@ private struct DayCell: View {
             .frame(height: 6)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 54)
+        .frame(minHeight: 54)
         .contentShape(Rectangle())
-        .accessibilityLabel(day.formatted(date: .abbreviated, time: .omitted))
+        .accessibilityElement(children: .ignore)
     }
 }
 
 private struct SummaryPill: View {
+    let title: String
     let symbol: String
     let color: Color
     let text: String
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(color)
+            Image(systemName: symbol).font(.subheadline.weight(.semibold)).foregroundStyle(color).accessibilityHidden(true)
             Text(text)
                 .font(.mina(.caption2, weight: .medium))
                 .foregroundStyle(MinaTheme.textSecondary)
@@ -301,5 +320,7 @@ private struct SummaryPill: View {
         .padding(.horizontal, 6)
         .background(MinaTheme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MinaTheme.border, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Spoken.sentence([title, text]))
     }
 }

@@ -10,15 +10,17 @@ struct OnboardingView: View {
     @State private var name = "Mina"
     @State private var birthDate = Calendar.current.startOfDay(for: .now)
     @State private var error: String?
+    @ScaledMetric(relativeTo: .largeTitle) private var hero = 72.0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     Image(systemName: "moon.stars.fill")
-                        .font(.system(size: 72))
+                        .font(.system(size: hero))
                         .foregroundStyle(MinaTheme.accent)
                         .padding(.top, 40)
+                        .accessibilityHidden(true)
                     VStack(spacing: 8) {
                         Text("Welcome, little one")
                             .font(.mina(.largeTitle, weight: .bold))
@@ -59,10 +61,11 @@ struct OnboardingView: View {
 
                     HStack(spacing: 14) {
                         Image(systemName: "envelope.open.fill")
-                            .font(.system(size: 22))
+                            .font(.title2)
                             .foregroundStyle(MinaTheme.accent)
                             .frame(width: 44, height: 44)
                             .background(MinaTheme.cardTint, in: Circle())
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Got an invite?")
                                 .font(.mina(.headline))

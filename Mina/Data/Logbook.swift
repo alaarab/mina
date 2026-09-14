@@ -193,13 +193,19 @@ final class Logbook: @unchecked Sendable {
     /// since its process may not live long enough for a delayed one.
     static func widgetsChanged() {
         if PersistenceController.isExtension {
-            WidgetCenter.shared.reloadAllTimelines()
+            reloadWidgetsAndControls()
             return
         }
         widgetReloads.call {
-            WidgetCenter.shared.reloadAllTimelines()
+            reloadWidgetsAndControls()
             EntryIndex.refresh()
         }
+    }
+
+    /// The Control Center buttons show the same running timers as the widgets.
+    private static func reloadWidgetsAndControls() {
+        WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
     }
 
     /// Off the main queue: neither a widget reload nor kicking off the

@@ -871,3 +871,88 @@ final class QuietTests: XCTestCase {
         XCTAssertTrue(Quiet.label(now: now)?.hasPrefix("Quiet hours until") == true)
     }
 }
+
+final class SpokenTests: XCTestCase {
+    func testExpandsTheLogsShorthandForVoiceOver() {
+        XCTAssertEqual(Spoken.text("Bottle · 4 oz"), "Bottle, 4 ounces")
+        XCTAssertEqual(Spoken.text("1 oz of 20 oz · on track"), "1 ounce of 20 ounces, on track")
+        XCTAssertEqual(Spoken.text("120 ml"), "120 milliliters")
+        XCTAssertEqual(Spoken.text("Sleep · 1h 20m"), "Sleep, 1 hour 20 minutes")
+        XCTAssertEqual(Spoken.text("14h 5m of 15h · done"), "14 hours 5 minutes of 15 hours, done")
+        XCTAssertEqual(Spoken.text("<1m of 15h"), "under a minute of 15 hours")
+        XCTAssertEqual(Spoken.text("expect 6–8 a day"), "expect 6 to 8 a day")
+        XCTAssertEqual(Spoken.text("expect 6+ wet"), "expect 6 or more wet")
+        XCTAssertEqual(Spoken.text("switched 2×"), "switched 2 times")
+        XCTAssertEqual(Spoken.text("Fed 12m ago"), "Fed 12 minutes ago")
+        XCTAssertEqual(Spoken.text("10:00 AM"), "10:00 AM", "times are left alone")
+    }
+
+    func testRowsReadAsOneSentence() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let calendar = Calendar.current
+        let start = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: Date(timeIntervalSince1970: 1_780_000_000))!
+        var draft = EntryDraft(kind: .bottle, startedAt: start)
+        draft.amountML = 4 * VolumeUnit.millilitersPerOunce
+        draft.loggedBy = "Mom"
+        let bottle = try logbook.add(draft, to: baby, in: context)
+        XCTAssertEqual(Spoken.entry(bottle, unit: .ounces, now: start), "Bottle, 4 ounces, by Mom, \(Format.time(start))")
+
+        var sleep = EntryDraft(kind: .sleep, startedAt: start)
+        sleep.endedAt = start.addingTimeInterval(80 * 60)
+        sleep.loggedBy = ""
+        let nap = try logbook.add(sleep, to: baby, in: context)
+        XCTAssertEqual(Spoken.entry(nap, unit: .ounces, now: start), "Sleep, 1 hour 20 minutes, \(Format.time(start)), to \(Format.time(sleep.endedAt!))")
+
+        let goal = Goal(kind: .feeds, title: "Feeds", value: 5, target: 8, unit: "feeds", status: .onTrack, detail: "5 of 8 · on track")
+        XCTAssertEqual(Spoken.goal(goal), "Feeds, 5 of 8, on track")
+        XCTAssertEqual(Spoken.tile(title: "Feeds", value: "5", detail: "12 oz · 2 nursed", expect: "expect 8–12 a day"), "Feeds, 5, 12 ounces, 2 nursed, expect 8 to 12 a day")
+
+        let summary = DaySummary(entries: [bottle, nap], day: start, now: start.addingTimeInterval(6 * 3600))
+        let day = Spoken.day(start, summary: summary, isToday: false)
+        XCTAssertTrue(day.hasSuffix(", 1 feed, 1 hour 20 minutes sleep"), day)
+        XCTAssertTrue(Spoken.day(start, summary: nil, isToday: true).hasSuffix(", today, nothing logged"))
+    }
+}
+
+final class ControlStateTests: XCTestCase {
+    func testReadsTheRunningTimersAndWordsTheControls() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        XCTAssertFalse(ControlState.load(logbook: logbook, context: context).hasBaby, "no baby, nothing to show")
+
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let start = Calendar.current.date(bySettingHour: 14, minute: 15, second: 0, of: Date(timeIntervalSince1970: 1_780_000_000))!
+        var idle = ControlState.load(logbook: logbook, context: context)
+        XCTAssertTrue(idle.hasBaby)
+        XCTAssertFalse(idle.isNursing)
+        XCTAssertFalse(idle.isSleeping)
+        XCTAssertEqual(idle.sleepValue, "Awake")
+        idle.suggestedSide = .right
+        XCTAssertEqual(idle.nursingValue, "Start on the right")
+        idle.unit = .ounces
+        idle.lastBottleML = 4 * VolumeUnit.millilitersPerOunce
+        XCTAssertEqual(idle.bottleValue, "4 oz")
+
+        let nursing = try logbook.startNursing(side: .left, for: baby, at: start, in: context)
+        try logbook.add(EntryDraft(kind: .sleep, startedAt: start), to: baby, in: context)
+        var running = ControlState.load(logbook: logbook, context: context)
+        XCTAssertEqual(running.nursingSince, start)
+        XCTAssertEqual(running.nursingSide, .left)
+        XCTAssertEqual(running.nursingValue, "Left since \(Format.time(start))")
+        XCTAssertEqual(running.sleepValue, "Asleep since \(Format.time(start))")
+
+        try logbook.switchNursingSide(nursing, at: start.addingTimeInterval(300), in: context)
+        running = ControlState.load(logbook: logbook, context: context)
+        XCTAssertEqual(running.nursingSide, .right, "the side shown is the one she is on now, not the entry's 'both'")
+
+        try logbook.endNursing(nursing, at: start.addingTimeInterval(600), in: context)
+        try logbook.endSleep(for: baby, at: start.addingTimeInterval(600), in: context)
+        let done = ControlState.load(logbook: logbook, context: context)
+        XCTAssertFalse(done.isNursing)
+        XCTAssertFalse(done.isSleeping)
+    }
+}

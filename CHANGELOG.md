@@ -2,11 +2,20 @@
 
 Newest first. The version is the release (1.0.0, 1.0.1, ...); the build number counts uploads. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
-## 1.0.0
+## 1.0.1
 
 ### New
 - Photos on notes and milestones, from the camera or your library. Location data is stripped before it syncs.
 - Mina runs on iPad, in any orientation.
+- Control Center buttons for a bottle, nursing and sleep.
+
+### Fixed
+- A bottle logged from the widget left the feed alarm set for the previous feed, so it rang anyway. Widget and Control Center buttons now update the alarm like the app does.
+- Larger text sizes, VoiceOver and dark mode polish throughout.
+
+## 1.0.0
+
+### New
 - Quiet: the bell on Today pauses the feed alarm, reminders and partner alerts on this phone for an hour, three hours, until morning, or until you turn them back on. Quiet hours in Settings do it nightly.
 - Today's goals: feeds, milk by bottle (from her latest weight), wet and dirty diapers, sleep and the gap since the last feed, with targets for her age and rings that know what time of day it is. Set your own targets in Settings if the pediatrician gave you numbers.
 - Sunday evening digest: one notification with the week's feeds, diapers and sleep, and how it compares to last week.

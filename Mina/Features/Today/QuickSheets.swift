@@ -26,6 +26,7 @@ struct BottleSheet: View {
     let onSave: (EntryDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var amount: Double
     @State private var when = Date.now
     @State private var note = ""
@@ -39,24 +40,27 @@ struct BottleSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(spacing: 28) {
-                HStack(spacing: 28) {
+                HStack(spacing: dynamicTypeSize.isAccessibilitySize ? 16 : 28) {
                     StepButton(symbol: "minus") { amount = max(0, amount - unit.step) }
                     VStack(spacing: 0) {
                         AmountField(value: $amount, unit: unit)
                         Text("\(unit.symbol) · tap to type")
                             .font(.mina(.footnote, weight: .medium))
                             .foregroundStyle(MinaTheme.textMuted)
+                            .multilineTextAlignment(.center)
                     }
-                    .frame(minWidth: 150)
+                    .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 100 : 150)
                     StepButton(symbol: "plus") { amount = min(unit.maximum, amount + unit.step) }
                 }
                 .padding(.top, 12)
 
                 HStack(spacing: 8) {
                     ForEach(unit.quickPicks, id: \.self) { pick in
-                        Button(VolumeUnit.trim(pick)) { amount = pick }
+                        Button { amount = pick } label: { Text(VolumeUnit.trim(pick)).frame(minWidth: 24, minHeight: 30) }
                             .buttonStyle(.bordered)
+                            .accessibilityLabel("\(VolumeUnit.trim(pick)) \(unit.symbol == "oz" ? "ounces" : "milliliters")")
                             .tint(amount == pick ? MinaTheme.bottle : MinaTheme.textMuted)
                             .font(.mina(.body, weight: .semibold))
                     }
@@ -70,17 +74,21 @@ struct BottleSheet: View {
                         .font(.mina(.body))
                 }
                 .minaCard()
-
-                Spacer()
-
+            }
+            .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) {
                 Button { save() } label: {
                     Text("Save bottle").font(.mina(.headline)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(MinaTheme.bottle)
                 .controlSize(.large)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+                .background(MinaTheme.canvas)
             }
-            .padding(20)
             .minaCanvas()
             .navigationTitle("Bottle")
             .navigationBarTitleDisplayMode(.inline)
@@ -105,6 +113,9 @@ struct NursingSheet: View {
     let onSave: (EntryDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var bigNumber = 72.0
     @State private var manual = false
     @State private var side: NursingSide = Prefs.suggestedNursingSide
     @State private var minutes = 15
@@ -113,6 +124,7 @@ struct NursingSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(spacing: 24) {
                 Picker("Mode", selection: $manual) {
                     Text("Start timer").tag(false)
@@ -126,24 +138,25 @@ struct NursingSheet: View {
                     }
                     .pickerStyle(.segmented)
 
-                    HStack(spacing: 28) {
+                    HStack(spacing: dynamicTypeSize.isAccessibilitySize ? 16 : 28) {
                         StepButton(symbol: "minus") { minutes = max(1, minutes - 1) }
                         VStack(spacing: 0) {
                             Text("\(minutes)")
-                                .font(.system(size: 72, weight: .bold, design: .rounded))
+                                .font(.system(size: bigNumber, weight: .bold, design: .rounded))
                                 .foregroundStyle(MinaTheme.text)
                                 .contentTransition(.numericText())
-                                .animation(.snappy, value: minutes)
+                                .animation(reduceMotion ? nil : .snappy, value: minutes)
                             Text("minutes").font(.mina(.title3, weight: .medium)).foregroundStyle(MinaTheme.textMuted)
                         }
-                        .frame(minWidth: 130)
+                        .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 100 : 130)
                         StepButton(symbol: "plus") { minutes = min(120, minutes + 1) }
                     }
 
                     HStack(spacing: 8) {
                         ForEach([5, 10, 15, 20, 30], id: \.self) { pick in
-                            Button("\(pick)") { minutes = pick }
+                            Button { minutes = pick } label: { Text("\(pick)").frame(minWidth: 24, minHeight: 30) }
                                 .buttonStyle(.bordered)
+                                .accessibilityLabel("\(pick) minutes")
                                 .tint(minutes == pick ? MinaTheme.nursing : MinaTheme.textMuted)
                                 .font(.mina(.body, weight: .semibold))
                         }
@@ -156,8 +169,6 @@ struct NursingSheet: View {
                         TextField("Note (optional)", text: $note).font(.mina(.body))
                     }
                     .minaCard()
-
-                    Spacer()
 
                     Button { save() } label: {
                         Text("Save nursing").font(.mina(.headline)).frame(maxWidth: .infinity)
@@ -176,15 +187,15 @@ struct NursingSheet: View {
                     }
                     .padding(.top, 8)
 
-                    HStack(spacing: 14) {
-                        ForEach([NursingSide.left, .right]) { candidate in
+                    let sides = ForEach([NursingSide.left, .right]) { candidate in
                             Button {
                                 onStart(candidate)
                                 dismiss()
                             } label: {
                                 VStack(spacing: 6) {
                                     Image(systemName: candidate == .left ? "arrow.left.circle.fill" : "arrow.right.circle.fill")
-                                        .font(.system(size: 34))
+                                        .font(.largeTitle)
+                                        .accessibilityHidden(true)
                                     Text(candidate.title).font(.mina(.headline))
                                     if candidate == Prefs.suggestedNursingSide {
                                         Text("suggested").font(.mina(.caption2, weight: .semibold))
@@ -198,15 +209,21 @@ struct NursingSheet: View {
                                 .foregroundStyle(candidate == Prefs.suggestedNursingSide ? .white : MinaTheme.text)
                             }
                             .buttonStyle(.plain)
-                        }
+                            .accessibilityLabel(candidate == Prefs.suggestedNursingSide ? "Start on the \(candidate.title.lowercased()), suggested" : "Start on the \(candidate.title.lowercased())")
+                    }
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: 14) { sides }
+                    } else {
+                        HStack(spacing: 14) { sides }
                     }
 
                     Text("The timer keeps running if you leave the app. Switch sides or stop from the Today screen.")
                         .font(.mina(.footnote)).foregroundStyle(MinaTheme.textMuted).multilineTextAlignment(.center)
-                    Spacer()
                 }
             }
             .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
             .minaCanvas()
             .navigationTitle("Nursing")
             .navigationBarTitleDisplayMode(.inline)
@@ -236,6 +253,7 @@ struct NoteSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(spacing: 20) {
                 TextField("Spit up after the bottle, vitamin D drops, first smile…", text: $text, axis: .vertical)
                     .lineLimit(3...8)
@@ -247,7 +265,11 @@ struct NoteSheet: View {
                 DatePicker("When", selection: $when, in: ...Date.now.addingTimeInterval(60), displayedComponents: [.date, .hourAndMinute])
                     .font(.mina(.body))
                     .minaCard()
-                Spacer()
+            }
+            .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) {
                 Button {
                     var draft = EntryDraft(kind: .note, startedAt: when)
                     draft.note = text
@@ -261,8 +283,10 @@ struct NoteSheet: View {
                 .tint(MinaTheme.note)
                 .controlSize(.large)
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+                .background(MinaTheme.canvas)
             }
-            .padding(20)
             .minaCanvas()
             .navigationTitle("Note")
             .navigationBarTitleDisplayMode(.inline)
@@ -280,12 +304,13 @@ struct AmountField: View {
     let unit: VolumeUnit
     @State private var text = ""
     @FocusState private var focused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var bigNumber = 64.0
 
     var body: some View {
         TextField("0", text: $text)
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.center)
-            .font(.system(size: 64, weight: .bold, design: .rounded))
+            .font(.system(size: bigNumber, weight: .bold, design: .rounded))
             .foregroundStyle(MinaTheme.text)
             .focused($focused)
             .onAppear { text = VolumeUnit.trim(value) }
@@ -307,16 +332,20 @@ struct AmountField: View {
 struct StepButton: View {
     let symbol: String
     let action: () -> Void
+    /// Grows with the text, but never so far that two of them crowd the number out.
+    @ScaledMetric(relativeTo: .title2) private var scaled = 60.0
+    private var size: CGFloat { min(scaled, 72) }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 24, weight: .bold))
-                .frame(width: 60, height: 60)
+                .font(.title2.weight(.bold))
+                .frame(width: size, height: size)
                 .background(MinaTheme.cardTint, in: Circle())
                 .foregroundStyle(MinaTheme.text)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(symbol == "minus" ? "Less" : "More")
     }
 }
 
@@ -336,6 +365,7 @@ struct EntryEditor: View {
     @State private var endedAt: Date
     @State private var confirmDelete = false
     @State private var error: String?
+    @State private var saved = 0
 
     init(entry: LogEntry) {
         _entry = ObservedObject(wrappedValue: entry)
@@ -355,8 +385,11 @@ struct EntryEditor: View {
                     DatePicker(draft.kind == .sleep ? "Fell asleep" : "When", selection: $draft.startedAt, displayedComponents: [.date, .hourAndMinute])
                     HStack(spacing: 8) {
                         ForEach([-30, -15, -5, 5, 15], id: \.self) { minutes in
-                            Button(minutes > 0 ? "+\(minutes)m" : "\(minutes)m") { draft.startedAt = draft.startedAt.addingTimeInterval(Double(minutes) * 60) }
-                                .buttonStyle(.bordered).tint(MinaTheme.textMuted).font(.mina(.subheadline, weight: .semibold))
+                            Button { draft.startedAt = draft.startedAt.addingTimeInterval(Double(minutes) * 60) } label: {
+                                Text(minutes > 0 ? "+\(minutes)m" : "\(minutes)m").frame(minHeight: 30)
+                            }
+                            .buttonStyle(.bordered).tint(MinaTheme.textMuted).font(.mina(.subheadline, weight: .semibold))
+                            .accessibilityLabel(minutes > 0 ? "\(minutes) minutes later" : "\(-minutes) minutes earlier")
                         }
                     }
                 }
@@ -372,8 +405,9 @@ struct EntryEditor: View {
                         }
                         HStack(spacing: 8) {
                             ForEach(unit.quickPicks, id: \.self) { pick in
-                                Button(VolumeUnit.trim(pick)) { amountDisplay = pick }
+                                Button { amountDisplay = pick } label: { Text(VolumeUnit.trim(pick)).frame(minWidth: 24, minHeight: 30) }
                                     .buttonStyle(.bordered).tint(amountDisplay == pick ? MinaTheme.bottle : MinaTheme.textMuted).font(.mina(.subheadline, weight: .semibold))
+                                    .accessibilityLabel("\(VolumeUnit.trim(pick)) \(unit.symbol == "oz" ? "ounces" : "milliliters")")
                             }
                         }
                     }
@@ -450,6 +484,7 @@ struct EntryEditor: View {
                     do { try Logbook.shared.delete(entry, in: context); dismiss() } catch { self.error = error.localizedDescription }
                 }
             }
+            .sensoryFeedback(.success, trigger: saved)
             .errorAlert($error)
         }
     }
@@ -465,6 +500,11 @@ struct EntryEditor: View {
         case .diaper, .note, .growth, .medicine, .bath, .temperature, .milestone: break
         }
         Logbook.shared.apply(final, to: entry)
-        do { try context.save(); dismiss() } catch { self.error = error.localizedDescription }
+        do {
+            try context.save()
+            Logbook.widgetsChanged()
+            saved &+= 1
+            dismiss()
+        } catch { self.error = error.localizedDescription }
     }
 }
