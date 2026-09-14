@@ -35,25 +35,30 @@ struct PhotoAttachment: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .onTapGesture { viewing = true }
+                        .accessibilityLabel("Photo, opens viewer")
+                        .accessibilityAddTraits(.isButton)
                         .overlay(alignment: .topTrailing) {
                             Button {
                                 withAnimation(.snappy) { self.photo = nil }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 22))
+                                    .font(.title2)
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, .black.opacity(0.6))
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .offset(x: 6, y: -6)
+                            .offset(x: 12, y: -12)
                             .accessibilityLabel("Remove photo")
                         }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Photo attached").font(.mina(.subheadline, weight: .medium)).foregroundStyle(MinaTheme.text)
                         Text("Location and camera details are removed before it syncs.")
                             .font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
-                        Button("Replace") { choosing = true }
+                        Button { choosing = true } label: { Text("Replace").frame(minHeight: 44) }
                             .font(.mina(.subheadline, weight: .semibold)).tint(tint)
+                            .accessibilityLabel("Replace photo")
                     }
                     Spacer(minLength: 0)
                 }
@@ -168,7 +173,7 @@ struct EntryThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture { viewing = true }
-        .accessibilityLabel("Photo")
+        .accessibilityLabel("Photo, opens viewer")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("entry-photo")
         .fullScreenCover(isPresented: $viewing) {
@@ -185,6 +190,7 @@ struct PhotoViewer: View {
     let jpeg: Data
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var zoom: CGFloat = 1
     @State private var pinch: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -206,7 +212,7 @@ struct PhotoViewer: View {
                                 .onEnded { value in
                                     zoom = min(6, max(1, zoom * value.magnification))
                                     pinch = 1
-                                    if zoom == 1 { withAnimation(.snappy) { offset = .zero } }
+                                    if zoom == 1 { withAnimation(reduceMotion ? nil : .snappy) { offset = .zero } }
                                 }
                         )
                         .simultaneousGesture(
@@ -219,12 +225,13 @@ struct PhotoViewer: View {
                                 }
                         )
                         .onTapGesture(count: 2) {
-                            withAnimation(.snappy) {
+                            withAnimation(reduceMotion ? nil : .snappy) {
                                 zoom = zoom > 1 ? 1 : 2.5
                                 offset = .zero
                             }
                         }
                         .accessibilityLabel("Photo")
+                        .accessibilityHint("Pinch to zoom, double tap to reset")
                 } else {
                     Text("This photo couldn't be opened.").foregroundStyle(.white)
                 }

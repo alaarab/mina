@@ -59,6 +59,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
 
 struct HistoryView: View {
     @ObservedObject var baby: Baby
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var filter: HistoryFilter
     @State private var query = DebugLaunch.argument("-history-query") ?? ""
 
@@ -89,7 +90,7 @@ struct HistoryView: View {
         HStack(spacing: 8) {
             ForEach(HistoryFilter.allCases) { candidate in
                 Button {
-                    withAnimation(.snappy) { filter = candidate }
+                    withAnimation(reduceMotion ? nil : .snappy) { filter = candidate }
                 } label: {
                     Text(candidate.title)
                         .font(.mina(.subheadline, weight: .semibold))
@@ -97,12 +98,15 @@ struct HistoryView: View {
                         .background(filter == candidate ? MinaTheme.accent : MinaTheme.card, in: Capsule())
                         .overlay(Capsule().strokeBorder(filter == candidate ? .clear : MinaTheme.border, lineWidth: 1))
                         .foregroundStyle(filter == candidate ? .white : MinaTheme.text)
+                        // The chip stays slim; the tap area reaches 44 points.
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(filter == candidate ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.vertical, 6)
     }
 }
 
@@ -135,9 +139,13 @@ private struct HistoryList: View {
         let groups = DayGrouping.dayRuns(entries)
         List {
             if entries.isEmpty {
-                Text(query.isEmpty ? "Nothing logged here yet." : "No matches for “\(query)”.")
-                    .font(.mina(.subheadline)).foregroundStyle(MinaTheme.textMuted)
+                Text(emptyText)
+                    .font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
             ForEach(groups, id: \.day) { group in
                 Section {
@@ -159,9 +167,24 @@ private struct HistoryList: View {
             }
         }
         .listStyle(.insetGrouped)
+        .animation(nil, value: entries.count)
         .scrollDismissesKeyboard(.immediately)
         .scrollContentBackground(.hidden)
         .background(MinaTheme.canvas)
         .sheet(item: $editing) { EntryEditor(entry: $0) }
+    }
+
+    /// One friendly line with the obvious next step.
+    private var emptyText: String {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { return "Nothing matches “\(trimmed)”. Try a word from a note, a medicine name, or who logged it." }
+        switch filter {
+        case .all: return "Nothing logged yet. Everything you log shows up here, newest first."
+        case .feeds: return "No feeds yet. Log a bottle or start the nursing timer from Today."
+        case .diapers: return "No diapers yet. Tap Diaper on Today after the next change."
+        case .sleep: return "No sleep, tummy time or baths yet. Tap Sleep on Today when she goes down."
+        case .health: return "No weights, medicine or temperatures yet. They're under the plus button on Today."
+        case .notes: return "No notes yet. Tap Note on Today for anything worth remembering, with a photo if you like."
+        }
     }
 }

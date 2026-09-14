@@ -37,7 +37,8 @@ enum MinaTheme {
     static let cardTint = Color.adaptive(light: 0xFDEDE3, dark: 0x2E2724)
     static let text = Color.adaptive(light: 0x2B2321, dark: 0xF4ECE6)
     static let textSecondary = Color.adaptive(light: 0x6E625D, dark: 0xB8ACA5)
-    static let textMuted = Color.adaptive(light: 0x9C908A, dark: 0x8A7F79)
+    /// The quietest text still has to read: 4.6:1 on the canvas in light, 5.3:1 on a card in dark.
+    static let textMuted = Color.adaptive(light: 0x7A706C, dark: 0x9C908A)
     static let border = Color.adaptive(light: 0xF1E3D9, dark: 0x3A332F)
 
     static let accent = Color(hex: 0xE4826F)

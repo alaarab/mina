@@ -330,7 +330,7 @@ struct SettingsView: View {
 
     private func siriPhrase(_ text: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "waveform").foregroundStyle(MinaTheme.accent).font(.system(size: 12, weight: .semibold))
+            Image(systemName: "waveform").foregroundStyle(MinaTheme.accent).font(.caption.weight(.semibold)).accessibilityHidden(true)
             Text("“\(text)”").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
         }
     }
@@ -400,9 +400,11 @@ struct ShiftsView: View {
                             DatePicker("To", selection: minuteBinding($block.endMinute), displayedComponents: .hourAndMinute).labelsHidden()
                             Spacer()
                             Button { block.deviceID = Prefs.deviceID; block.name = Prefs.yourName.isEmpty ? block.name : Prefs.yourName } label: {
-                                Image(systemName: block.deviceID == Prefs.deviceID ? "iphone.badge.checkmark" : "iphone")
+                                Image(systemName: block.deviceID == Prefs.deviceID ? "iphone.badge.checkmark" : "iphone").frame(minWidth: 30, minHeight: 30)
                             }
-                            .buttonStyle(.bordered).accessibilityLabel("This is my phone")
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("This is my phone")
+                            .accessibilityValue(block.deviceID == Prefs.deviceID ? "yes" : "no")
                         }
                     }
                 }

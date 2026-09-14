@@ -220,7 +220,7 @@ private struct WidgetButton<Intent: AppIntent>: View {
     var body: some View {
         Button(intent: intent) {
             VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
+                Image(systemName: symbol).font(.callout.weight(.semibold))
                 Text(title).font(.mina(.caption2, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity)
@@ -257,7 +257,7 @@ struct MinaQuickLogWidget: Widget {
                 .containerBackground(MinaTheme.card, for: .widget)
         }
         .configurationDisplayName("Quick log")
-        .description("Log a bottle, pee, poop, or sleep with one tap.")
+        .description("Log a bottle, pee, poop or sleep with one tap.")
         .supportedFamilies([.systemMedium])
     }
 }
@@ -267,6 +267,11 @@ struct MinaWidgetBundle: WidgetBundle {
     var body: some Widget {
         MinaQuickLogWidget()
         MinaStatusWidget()
+        if #available(iOS 18.0, *) {
+            LogBottleControl()
+            NursingControl()
+            SleepControl()
+        }
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) { FeedAlarmActivity() }
         #endif

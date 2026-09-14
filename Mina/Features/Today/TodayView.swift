@@ -27,16 +27,27 @@ private struct TodayContent: View {
 
     @Environment(\.managedObjectContext) private var context
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @StoredVolumeUnit private var unit
     /// Read back through `Prefs`, but observed here so the Bottle button's
     /// "Last 4 oz" follows a feed logged by a widget or by Siri.
     @AppStorage(Prefs.lastBottleKey, store: Prefs.defaults) private var lastBottleML = 0.0
     @FetchRequest private var entries: FetchedResults<LogEntry>
-    @State private var sheet: QuickSheet?
+    @State private var sheet: QuickSheet? = DebugLaunch.argument("-open") == "bottle" ? .bottle : nil
     @State private var editing: LogEntry?
     @State private var error: String?
     @State private var asking = DebugLaunch.argument("-open") == "ask"
     @State private var dismissedPromptTick = 0
+    @State private var promptShown = 0
+    /// A light tap for a one-tap log, a success tap for a saved sheet.
+    @State private var haptic = Haptic()
+
+    private struct Haptic: Equatable {
+        enum Kind { case tap, success }
+        var kind = Kind.tap
+        var tick = 0
+        mutating func play(_ kind: Kind) { self.kind = kind; tick &+= 1 }
+    }
     @State private var quietTick = 0
 
     init(baby: Baby, now: Date) {
@@ -160,6 +171,7 @@ private struct TodayContent: View {
                     } label: {
                         Label("Quiet", systemImage: Quiet.label(now: now) != nil ? "bell.slash.fill" : "bell")
                     }
+                    .accessibilityValue(Quiet.label(now: now) ?? "Off")
                     .id(quietTick)
                 }
             }
@@ -168,13 +180,14 @@ private struct TodayContent: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .bottle: BottleSheet(unit: unit) { log($0) }.minaSheet()
-                case .nursing: NursingSheet(onStart: startNursing) { log($0) }.minaSheet()
-                case .note: NoteSheet { log($0) }.minaSheet()
-                case .extra(let kind): ExtraSheet(kind: kind, unit: unit) { log($0) }.minaSheet()
+                case .bottle: BottleSheet(unit: unit) { log($0, feel: .success) }.minaSheet()
+                case .nursing: NursingSheet(onStart: startNursing) { log($0, feel: .success) }.minaSheet()
+                case .note: NoteSheet { log($0, feel: .success) }.minaSheet()
+                case .extra(let kind): ExtraSheet(kind: kind, unit: unit) { log($0, feel: .success) }.minaSheet()
                 }
             }
             .sheet(item: $editing) { EntryEditor(entry: $0).minaSheet() }
+            .sensoryFeedback(trigger: haptic) { _, new in new.kind == .success ? .success : .impact(weight: .light) }
             .errorAlert($error)
             .onAppear { scheduleFeedAlerts(day) }
             .onChange(of: entries.count) { _, _ in scheduleFeedAlerts(day) }
@@ -207,43 +220,46 @@ private struct TodayContent: View {
     private func statusCard(_ day: Day) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if quietTick >= 0, let quiet = Quiet.label(now: now) {
-                HStack(spacing: 12) {
-                    Image(systemName: "bell.slash.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.textMuted).frame(width: 32)
+                StatusRow(symbol: "bell.slash.fill", color: MinaTheme.textMuted) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(quiet).font(.mina(.headline))
                         Text("No alarm, reminders or partner alerts on this phone").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
                     }
-                    Spacer()
+                    .accessibilityElement(children: .combine)
+                } trailing: {
                     if Quiet.until != nil {
                         Button("Resume") { resumeAlerts() }.buttonStyle(.bordered).font(.mina(.subheadline, weight: .semibold))
+                            .accessibilityLabel("Resume alerts")
                     }
                 }
                 Divider()
             }
             if dismissedPromptTick >= 0, let dismissed = FeedAlarm.pendingDismissal, day.lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
-                HStack(spacing: 12) {
-                    Image(systemName: "alarm.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.warning).frame(width: 32)
+                StatusRow(symbol: "alarm.fill", color: MinaTheme.warning) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Feed alarm went off \(Format.ago(from: dismissed, to: now))").font(.mina(.headline))
                         Text("Nothing logged since. Did she eat?").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
                     }
-                    Spacer()
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Feed alarm went off \(Spoken.text(Format.ago(from: dismissed, to: now))). Nothing logged since. Did she eat?")
+                } trailing: {
                     Button("Log it") { sheet = .bottle }.buttonStyle(.borderedProminent).tint(MinaTheme.bottle).font(.mina(.subheadline, weight: .semibold))
+                        .accessibilityLabel("Log a bottle")
                     Button {
                         FeedAlarm.pendingDismissal = nil
                         dismissedPromptTick &+= 1
                     } label: {
-                        Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                        Image(systemName: "xmark").font(.footnote.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).foregroundStyle(MinaTheme.textMuted).accessibilityLabel("Dismiss")
+                    .buttonStyle(.plain).foregroundStyle(MinaTheme.textMuted).accessibilityLabel("Dismiss, she didn't eat")
                 }
+                // A warning tap when the "did she eat?" prompt comes up.
+                .onAppear { promptShown &+= 1 }
+                .sensoryFeedback(.warning, trigger: promptShown)
                 Divider()
             }
-            HStack(spacing: 12) {
-                Image(systemName: Shifts.thisPhoneIsOn(for: baby, at: now) ? "person.fill.checkmark" : "person.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(Shifts.thisPhoneIsOn(for: baby, at: now) ? MinaTheme.diaper : MinaTheme.textMuted)
-                    .frame(width: 32)
+            StatusRow(symbol: Shifts.thisPhoneIsOn(for: baby, at: now) ? "person.fill.checkmark" : "person.fill",
+                      color: Shifts.thisPhoneIsOn(for: baby, at: now) ? MinaTheme.diaper : MinaTheme.textMuted) {
                 VStack(alignment: .leading, spacing: 2) {
                     if let who = Shifts.onDutyLabel(for: baby, at: now) {
                         Text(Shifts.thisPhoneIsOn(for: baby, at: now) ? "You're on" : "\(who) is on").font(.mina(.headline))
@@ -253,21 +269,20 @@ private struct TodayContent: View {
                         Text("Alarms and alerts go to both phones").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
                     }
                 }
-                Spacer()
+                .accessibilityElement(children: .combine)
+            } trailing: {
                 if baby.onDutyDeviceID == Prefs.deviceID {
                     Button("Hand off") { do { try Shifts.handOff(baby, in: context); scheduleFeedAlerts(day) } catch { self.error = error.localizedDescription } }
                         .buttonStyle(.bordered).tint(MinaTheme.textSecondary).font(.mina(.subheadline, weight: .semibold))
+                        .accessibilityHint("Alarms and alerts go back to both phones")
                 } else {
                     Button("I'm on") { do { try Shifts.takeOver(baby, in: context); scheduleFeedAlerts(day) } catch { self.error = error.localizedDescription } }
                         .buttonStyle(.borderedProminent).tint(MinaTheme.diaper).font(.mina(.subheadline, weight: .semibold))
+                        .accessibilityHint("Only this phone rings the alarm and gets partner alerts")
                 }
             }
             Divider()
-            HStack(spacing: 12) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(MinaTheme.accent)
-                    .frame(width: 32)
+            StatusRow(symbol: "clock.fill", color: MinaTheme.accent) {
                 VStack(alignment: .leading, spacing: 2) {
                     if let lastFeed = day.lastFeed, let at = lastFeed.startedAt {
                         Text("Fed \(Format.ago(from: at, to: now))")
@@ -275,6 +290,7 @@ private struct TodayContent: View {
                         Text("\(lastFeed.title(unit: unit, now: now)) at \(Format.time(at)) · tap to edit")
                             .font(.mina(.subheadline))
                             .foregroundStyle(MinaTheme.textSecondary)
+                            .accessibilityLabel(Spoken.sentence([lastFeed.title(unit: unit, now: now), "at \(Format.time(at))"]))
                     } else {
                         Text("No feeds logged yet")
                             .font(.mina(.headline))
@@ -283,17 +299,15 @@ private struct TodayContent: View {
                             .foregroundStyle(MinaTheme.textSecondary)
                     }
                 }
-                Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
             .onTapGesture { if let lastFeed = day.lastFeed { editing = lastFeed } }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(day.lastFeed == nil ? [] : .isButton)
+            .accessibilityHint(day.lastFeed == nil ? "" : "Opens the feed to edit")
             if let nursing = day.nursing, let since = nursing.startedAt {
                 Divider()
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(MinaTheme.nursing)
-                        .frame(width: 32)
+                StatusRow(symbol: "heart.fill", color: MinaTheme.nursing) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Nursing · \(Format.duration(now.timeIntervalSince(since)))")
                             .font(.mina(.headline))
@@ -301,23 +315,23 @@ private struct TodayContent: View {
                             .font(.mina(.subheadline))
                             .foregroundStyle(MinaTheme.textSecondary)
                     }
-                    Spacer()
-                    Button { switchSide(nursing) } label: { Image(systemName: "arrow.left.arrow.right").frame(width: 30, height: 30) }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Nursing timer")
+                    .accessibilityValue(Spoken.sentence(["running", Format.duration(now.timeIntervalSince(since)), nursingSideText(nursing)]))
+                } trailing: {
+                    Button { switchSide(nursing) } label: { Image(systemName: "arrow.left.arrow.right").frame(minWidth: 30, minHeight: 30) }
                         .buttonStyle(.bordered).tint(MinaTheme.nursing)
                         .accessibilityLabel("Switch side")
                     Button("Done") { endNursing(nursing) }
                         .buttonStyle(.borderedProminent)
                         .tint(MinaTheme.nursing)
                         .font(.mina(.subheadline, weight: .semibold))
+                        .accessibilityLabel("Done nursing")
                 }
             }
             if let prediction = day.feedPrediction, day.sleeping == nil || prediction.expectedAt > now {
                 Divider()
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18))
-                        .foregroundStyle(prediction.expectedAt < now.addingTimeInterval(-15 * 60) ? MinaTheme.warning : MinaTheme.textMuted)
-                        .frame(width: 32)
+                StatusRow(symbol: "sparkles", color: prediction.expectedAt < now.addingTimeInterval(-15 * 60) ? MinaTheme.warning : MinaTheme.textMuted, small: true) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Next feed \(Predictor.phrase(for: prediction.expectedAt, now: now))")
                             .font(.mina(.subheadline, weight: .semibold))
@@ -325,16 +339,13 @@ private struct TodayContent: View {
                             .font(.mina(.caption))
                             .foregroundStyle(MinaTheme.textMuted)
                     }
-                    Spacer(minLength: 0)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(Spoken.sentence(["Next feed \(Predictor.phrase(for: prediction.expectedAt, now: now))", "around \(Format.time(prediction.expectedAt)), every \(Format.duration(prediction.interval)) going by \(prediction.basis)"]))
                 }
             }
             if let nap = day.napPrediction {
                 Divider()
-                HStack(spacing: 12) {
-                    Image(systemName: "moon.zzz")
-                        .font(.system(size: 18))
-                        .foregroundStyle(nap.expectedAt < now ? MinaTheme.sleep : MinaTheme.textMuted)
-                        .frame(width: 32)
+                StatusRow(symbol: "moon.zzz", color: nap.expectedAt < now ? MinaTheme.sleep : MinaTheme.textMuted, small: true) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(nap.expectedAt < now ? "Nap window is open" : "Nap window \(Predictor.phrase(for: nap.expectedAt, now: now))")
                             .font(.mina(.subheadline, weight: .semibold))
@@ -342,16 +353,13 @@ private struct TodayContent: View {
                             .font(.mina(.caption))
                             .foregroundStyle(MinaTheme.textMuted)
                     }
-                    Spacer(minLength: 0)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(Spoken.sentence([nap.expectedAt < now ? "Nap window is open" : "Nap window \(Predictor.phrase(for: nap.expectedAt, now: now))", "about \(Format.duration(nap.wakeWindow)) awake is her limit at this age"]))
                 }
             }
             if let sleeping = day.sleeping, let since = sleeping.startedAt {
                 Divider()
-                HStack(spacing: 12) {
-                    Image(systemName: "moon.zzz.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(MinaTheme.sleep)
-                        .frame(width: 32)
+                StatusRow(symbol: "moon.zzz.fill", color: MinaTheme.sleep) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Asleep for \(Format.duration(now.timeIntervalSince(since)))")
                             .font(.mina(.headline))
@@ -359,7 +367,10 @@ private struct TodayContent: View {
                             .font(.mina(.subheadline))
                             .foregroundStyle(MinaTheme.textSecondary)
                     }
-                    Spacer()
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Sleep timer")
+                    .accessibilityValue(Spoken.sentence(["asleep for \(Format.duration(now.timeIntervalSince(since)))", "since \(Format.time(since))"]))
+                } trailing: {
                     Button("Woke up") { endSleep(sleeping) }
                         .buttonStyle(.borderedProminent)
                         .tint(MinaTheme.sleep)
@@ -373,10 +384,12 @@ private struct TodayContent: View {
     private func goalsCard(_ day: Day) -> some View {
         let goals = day.goals
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Today's goals").font(.mina(.headline))
-                Spacer()
-                Text("for \(day.stage?.title.lowercased() ?? "her age")").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+            let heading = Text("Today's goals").font(.mina(.headline))
+            let stage = Text("for \(day.stage?.title.lowercased() ?? "her age")").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) { heading; stage }
+            } else {
+                HStack { heading; Spacer(); stage }
             }
             ForEach(goals) { goal in
                 HStack(spacing: 12) {
@@ -387,10 +400,12 @@ private struct TodayContent: View {
                     }
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Spoken.goal(goal))
             }
             if let concern = Goals.concern(goals, ageDays: baby.ageDays(on: now)) {
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.bubble.fill").foregroundStyle(MinaTheme.warning)
+                    Image(systemName: "exclamationmark.bubble.fill").foregroundStyle(MinaTheme.warning).accessibilityHidden(true)
                     Text(concern).font(.mina(.footnote)).foregroundStyle(MinaTheme.textSecondary)
                 }
                 .padding(.top, 2)
@@ -402,7 +417,7 @@ private struct TodayContent: View {
     private func statsRow(_ day: Day) -> some View {
         let summary = day.summary
         let stage = day.stage
-        return HStack(spacing: 10) {
+        return StatTiles {
             NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
                 StatTile(title: "Feeds", value: "\(summary.feeds)", color: MinaTheme.bottle,
                          detail: feedDetail(summary),
@@ -419,12 +434,11 @@ private struct TodayContent: View {
                          expect: stage.map { "expect \($0.expectation.sleepText())" })
             }
         }
-        .buttonStyle(.plain)
     }
 
     private func quickLog(_ day: Day) -> some View {
         VStack(spacing: 10) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
                 QuickButton(title: "Bottle", subtitle: "Last \(unit.format(ml: Prefs.lastBottleML))", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle) {
                     sheet = .bottle
                 }
@@ -479,7 +493,7 @@ private struct TodayContent: View {
                 VStack(spacing: 6) {
                     Text("Nothing logged yet")
                         .font(.mina(.headline))
-                    Text("Every feed, diaper and nap you or your partner log shows up here on both phones.")
+                    Text("Tap a button above to log the first one. Everything you or your partner log shows up here, on both phones.")
                         .font(.mina(.subheadline))
                         .foregroundStyle(MinaTheme.textMuted)
                         .multilineTextAlignment(.center)
@@ -489,15 +503,14 @@ private struct TodayContent: View {
             }
             ForEach(groups, id: \.day) { date, dayEntries in
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(Format.dayTitle(date, now: now))
-                            .font(.mina(.headline))
-                        Spacer()
-                        Text(dayLine(dayEntries, day: date))
-                            .font(.mina(.caption))
-                            .foregroundStyle(MinaTheme.textMuted)
+                    // The recap sits beside the day; once text is large it goes underneath.
+                    let title = Text(Format.dayTitle(date, now: now)).font(.mina(.headline))
+                    let recap = Text(dayLine(dayEntries, day: date)).font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 2) { title; recap }.padding(.horizontal, 4)
+                    } else {
+                        HStack(alignment: .firstTextBaseline) { title; Spacer(); recap.multilineTextAlignment(.trailing) }.padding(.horizontal, 4)
                     }
-                    .padding(.horizontal, 4)
                     EntryList(entries: dayEntries, unit: unit, now: now, onEdit: { editing = $0 }, onDelete: delete)
                 }
             }
@@ -565,10 +578,10 @@ private struct TodayContent: View {
         if let dismissed = FeedAlarm.pendingDismissal, let last = day.lastFeed?.startedAt, last > dismissed { FeedAlarm.pendingDismissal = nil }
     }
 
-    private func log(_ draft: EntryDraft) {
+    private func log(_ draft: EntryDraft, feel: Haptic.Kind = .tap) {
         do {
             try Logbook.shared.add(draft, to: baby, in: context)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            haptic.play(feel)
         } catch {
             self.error = error.localizedDescription
         }
@@ -583,7 +596,7 @@ private struct TodayContent: View {
     private func startNursing(_ side: NursingSide) {
         do {
             try Logbook.shared.startNursing(side: side, for: baby, at: now, in: context)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            haptic.play(.tap)
         } catch { self.error = error.localizedDescription }
     }
 
@@ -592,12 +605,20 @@ private struct TodayContent: View {
     }
 
     private func endNursing(_ entry: LogEntry) {
-        do { try Logbook.shared.endNursing(entry, at: now, in: context) } catch { self.error = error.localizedDescription }
+        do {
+            try Logbook.shared.endNursing(entry, at: now, in: context)
+            haptic.play(.tap)
+        } catch { self.error = error.localizedDescription }
     }
 
     private func endSleep(_ entry: LogEntry) {
         entry.endedAt = max(now, entry.startedAt ?? now)
-        do { try context.save() } catch { self.error = error.localizedDescription }
+        do {
+            try context.save()
+            haptic.play(.tap)
+            // The widgets and Control Center show "asleep"; tell them she's up.
+            Logbook.widgetsChanged()
+        } catch { self.error = error.localizedDescription }
     }
 
     private func delete(_ entry: LogEntry) {
@@ -606,6 +627,24 @@ private struct TodayContent: View {
 }
 
 // MARK: Pieces
+
+/// The three Feeds / Diapers / Sleep tiles in a row, top-aligned so the big
+/// numbers line up whatever the titles wrap to; a column once text is large.
+struct StatTiles<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 10) { content }
+            } else {
+                HStack(alignment: .top, spacing: 10) { content }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 struct StatTile: View {
     let title: String
@@ -627,18 +666,20 @@ struct StatTile: View {
             Text(detail)
                 .font(.mina(.caption2))
                 .foregroundStyle(MinaTheme.textSecondary)
-                .lineLimit(1)
+                .lineLimit(2)
                 .minimumScaleFactor(0.8)
             if let expect {
                 Text(expect)
                     .font(.mina(.caption2))
                     .foregroundStyle(MinaTheme.textMuted)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .minaCard(padding: 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Spoken.tile(title: title, value: value, detail: detail, expect: expect))
     }
 }
 
@@ -647,16 +688,18 @@ struct QuickButtonLabel: View {
     let subtitle: String
     let symbol: String
     let color: Color
+    @ScaledMetric(relativeTo: .headline) private var badge = 46.0
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(color.opacity(0.18))
                 Image(systemName: symbol)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(color)
             }
-            .frame(width: 46, height: 46)
+            .frame(width: badge, height: badge)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.mina(.headline))
@@ -664,8 +707,8 @@ struct QuickButtonLabel: View {
                 Text(subtitle)
                     .font(.mina(.caption))
                     .foregroundStyle(MinaTheme.textMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
             }
             Spacer(minLength: 0)
         }
@@ -674,6 +717,8 @@ struct QuickButtonLabel: View {
         .background(MinaTheme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(MinaTheme.border, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Spoken.sentence([title, subtitle]))
     }
 }
 
@@ -704,11 +749,60 @@ private extension View {
 }
 
 
+/// Icon, text and a trailing control in a row of the status card. Once text
+/// is large the control drops under the text, so neither gets squeezed into
+/// a column of single words.
+struct StatusRow<Content: View, Trailing: View>: View {
+    let symbol: String
+    let color: Color
+    /// The prediction rows use a lighter icon.
+    var small = false
+    @ViewBuilder let content: Content
+    @ViewBuilder let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title3) private var iconWidth = 32.0
+
+    init(symbol: String, color: Color, small: Bool = false, @ViewBuilder content: () -> Content, @ViewBuilder trailing: () -> Trailing) {
+        self.symbol = symbol
+        self.color = color
+        self.small = small
+        self.content = content()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        let icon = Image(systemName: symbol)
+            .font(small ? .body : .title3)
+            .foregroundStyle(color)
+            .frame(width: iconWidth)
+            .accessibilityHidden(true)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) { icon; content; Spacer(minLength: 0) }
+                if Trailing.self != EmptyView.self {
+                    HStack(spacing: 10) { trailing }.padding(.leading, iconWidth + 12)
+                }
+            }
+        } else {
+            HStack(spacing: 12) { icon; content; Spacer(minLength: 8); trailing }
+        }
+    }
+}
+
+extension StatusRow where Trailing == EmptyView {
+    init(symbol: String, color: Color, small: Bool = false, @ViewBuilder content: () -> Content) {
+        self.init(symbol: symbol, color: color, small: small, content: content, trailing: { EmptyView() })
+    }
+}
+
 /// A small progress ring coloured by the goal's kind and status.
 struct GoalRing: View {
     let progress: Double
     let status: Goal.Status
     let kind: Goal.Kind
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .subheadline) private var size = 34.0
 
     private var color: Color {
         if status == .short { return MinaTheme.warning }
@@ -724,9 +818,10 @@ struct GoalRing: View {
         ZStack {
             Circle().stroke(color.opacity(0.18), lineWidth: 5)
             Circle().trim(from: 0, to: progress).stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(-90))
-            if status == .done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(color) }
+            if status == .done { Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(color) }
         }
-        .frame(width: 34, height: 34)
-        .animation(.snappy, value: progress)
+        .frame(width: size, height: size)
+        .animation(reduceMotion ? nil : .snappy, value: progress)
+        .accessibilityHidden(true)
     }
 }

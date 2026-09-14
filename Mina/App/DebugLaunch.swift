@@ -3,8 +3,10 @@ import Foundation
 import UIKit
 
 /// Debug-only launch arguments: `-seed-demo` fills a fresh store with a
-/// realistic day, `-tab calendar|guide|settings` opens on that tab. Used for
-/// screenshots and quick manual checks in the simulator.
+/// realistic day (`-seed-empty` makes the baby and nothing else, for the empty
+/// states), `-tab calendar|guide|settings` opens on that tab, `-open
+/// bottle|ask|history` opens a sheet or screen. Used for screenshots and quick
+/// manual checks in the simulator.
 enum DebugLaunch {
     /// Screenshot runs skip the notification prompt so it doesn't cover the UI.
     static var isDemo: Bool {
@@ -46,6 +48,7 @@ enum DebugLaunch {
             // to a start-of-day date only fails for a calendar this app never uses.
             let birthDate = calendar.date(byAdding: .day, value: -max(23, days + 11), to: today)!
             let baby = try logbook.createBaby(name: "Mina", birthDate: birthDate, in: context)
+            if ProcessInfo.processInfo.arguments.contains("-seed-empty") { return }
             func add(_ kind: EntryKind, day: Int, hour: Double, _ configure: (inout EntryDraft) -> Void = { _ in }) throws {
                 let start = calendar.date(byAdding: .day, value: -day, to: today)!.addingTimeInterval(hour * 3600)
                 guard start <= now else { return }

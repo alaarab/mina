@@ -108,7 +108,7 @@ enum Goals {
         }
         if let target = t[.sleep] {
             let v = summary.sleepSeconds / 3600; let s = status(v, target)
-            goals.append(Goal(kind: .sleep, title: "Sleep", value: v, target: target, unit: "h", status: s, detail: "\(Format.duration(summary.sleepSeconds)) of \(VolumeUnit.trim(target))h · \(word(s))"))
+            goals.append(Goal(kind: .sleep, title: "Sleep", value: v, target: target, unit: "h", status: s, detail: "\(summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "0m") of \(VolumeUnit.trim(target))h · \(word(s))"))
         }
         if let limit = t[.feedGap] {
             let gap = lastFeed.map { now.timeIntervalSince($0) / 3600 } ?? 0

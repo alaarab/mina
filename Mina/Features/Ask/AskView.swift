@@ -176,7 +176,7 @@ struct AskView: View {
             HStack(alignment: .bottom, spacing: 4) {
                 Button { newChat() } label: {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(MinaTheme.textSecondary)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -190,7 +190,7 @@ struct AskView: View {
                     else if let last = messages.last(where: { $0.role == .mina && !$0.text.isEmpty }), !streaming { speaker.speak(last.text) }
                 } label: {
                     Image(systemName: speaks ? "speaker.wave.2.fill" : "speaker.slash")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(speaks ? MinaTheme.accent : MinaTheme.textSecondary)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -199,7 +199,7 @@ struct AskView: View {
 
                 Button { dictation.toggle() } label: {
                     Image(systemName: dictation.listening ? "mic.fill" : "mic")
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundStyle(dictation.listening ? Color.white : MinaTheme.textSecondary)
                         .frame(width: 36, height: 36)
                         .background(dictation.listening ? MinaTheme.danger : Color.clear, in: Circle())
@@ -213,7 +213,7 @@ struct AskView: View {
 
                 Button { streaming ? stop() : ask(question) } label: {
                     Image(systemName: streaming ? "stop.fill" : "arrow.up")
-                        .font(.system(size: streaming ? 13 : 17, weight: .semibold))
+                        .font((streaming ? Font.footnote : .body).weight(.semibold))
                         .foregroundStyle(sendEnabled ? Color.white : MinaTheme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(sendEnabled ? MinaTheme.accent : MinaTheme.border, in: Circle())

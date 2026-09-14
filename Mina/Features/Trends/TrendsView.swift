@@ -44,6 +44,9 @@ struct TrendsView: View {
     @FetchRequest private var entries: FetchedResults<LogEntry>
     @State private var reportURL: URL?
     @State private var asking = false
+    /// Charts grow with the text so the axis labels keep their room.
+    @ScaledMetric(relativeTo: .body) private var chartHeight = 160.0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private static let days = 14
 
@@ -59,6 +62,14 @@ struct TrendsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    let logged = stats.filter { $0.summary.feeds + $0.summary.diapers > 0 || $0.summary.sleepSeconds > 0 }.count
+                    if logged < 7 {
+                        Label(logged == 0 ? "Trends fill in as you log. Come back after a few days."
+                              : "Trends fill in as the week goes. \(Format.count(logged, "day")) logged so far.", systemImage: "chart.bar")
+                            .font(.mina(.footnote))
+                            .foregroundStyle(MinaTheme.textSecondary)
+                            .minaCard(padding: 12)
+                    }
                     weekSummary(week)
                     feedChart(stats)
                     sleepChart(stats)
@@ -103,7 +114,7 @@ struct TrendsView: View {
         let longest = week.map(\.longestSleep).max() ?? 0
         return VStack(alignment: .leading, spacing: 10) {
             Text("Last 7 days, per day").font(.mina(.headline))
-            HStack(spacing: 10) {
+            StatTiles {
                 NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
                     StatTile(title: "Feeds", value: String(format: "%.1f", feeds), color: MinaTheme.bottle, detail: ml > 0 ? "\(unit.format(ml: ml)) by bottle" : "no bottles", expect: nil)
                 }
@@ -111,10 +122,9 @@ struct TrendsView: View {
                     StatTile(title: "Diapers", value: String(format: "%.1f", wet + dirty), color: MinaTheme.diaper, detail: String(format: "%.1f wet · %.1f dirty", wet, dirty), expect: nil)
                 }
                 NavigationLink { HistoryView(baby: baby, filter: .sleep) } label: {
-                    StatTile(title: "Sleep", value: Format.duration(sleep), color: MinaTheme.sleep, detail: "longest \(Format.duration(longest))", expect: nil)
+                    StatTile(title: "Sleep", value: sleep > 0 ? Format.duration(sleep) : "0m", color: MinaTheme.sleep, detail: longest > 0 ? "longest \(Format.duration(longest))" : "no sleep logged", expect: nil)
                 }
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -125,15 +135,19 @@ struct TrendsView: View {
                 BarMark(x: .value("Day", stat.day, unit: .day), y: .value(unit.symbol, unit.display(ml: stat.summary.bottleML)))
                     .foregroundStyle(MinaTheme.bottle)
                     .cornerRadius(4)
-                if stat.summary.feeds > 0 {
+                // The counts above the bars collide once text is large; the bars stand alone then.
+                if stat.summary.feeds > 0, !dynamicTypeSize.isAccessibilitySize {
                     PointMark(x: .value("Day", stat.day, unit: .day), y: .value(unit.symbol, unit.display(ml: stat.summary.bottleML)))
                         .annotation(position: .top) { Text("\(stat.summary.feeds)").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted) }
                         .opacity(0)
                 }
             }
             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()) } }
-            .frame(height: 160)
-            Text("Number above each bar is the feed count, nursing included.").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
+            .frame(height: chartHeight)
+            .accessibilityLabel("Bottle \(unit.symbol) per day, last 14 days")
+            if !dynamicTypeSize.isAccessibilitySize {
+                Text("Number above each bar is the feed count, nursing included.").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
+            }
         }
         .minaCard()
     }
@@ -151,7 +165,8 @@ struct TrendsView: View {
                     .symbol(.circle)
             }
             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()) } }
-            .frame(height: 160)
+            .frame(height: chartHeight)
+            .accessibilityLabel("Sleep hours per day, last 14 days")
             Text("Bars are total sleep; the line is her longest single stretch.").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
         }
         .minaCard()
@@ -167,7 +182,8 @@ struct TrendsView: View {
                     .foregroundStyle(MinaTheme.diaperDirty)
             }
             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()) } }
-            .frame(height: 140)
+            .frame(height: chartHeight * 0.875)
+            .accessibilityLabel("Diapers per day, last 14 days")
             HStack(spacing: 12) {
                 Label("Wet", systemImage: "circle.fill").foregroundStyle(MinaTheme.diaper)
                 Label("Dirty", systemImage: "circle.fill").foregroundStyle(MinaTheme.diaperDirty)

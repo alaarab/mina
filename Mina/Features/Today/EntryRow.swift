@@ -9,50 +9,92 @@ struct EntryRow: View {
     @ObservedObject var entry: LogEntry
     let unit: VolumeUnit
     let now: Date
+    @ScaledMetric(relativeTo: .body) private var badge = 42.0
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(entry.color.opacity(0.18))
-                Image(systemName: entry.kind.symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(entry.color)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title(unit: unit, now: now))
-                    .font(.mina(.body, weight: .medium))
-                    .foregroundStyle(MinaTheme.text)
-                    .lineLimit(2)
-                if let subtitle = entry.subtitle {
-                    Text(subtitle)
-                        .font(.mina(.caption))
-                        .foregroundStyle(MinaTheme.textMuted)
-                        .lineLimit(1)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                // Large text: the time goes under the title instead of beside it.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) { icon; titles; Spacer(minLength: 0) }
+                    HStack(spacing: 12) {
+                        if let thumb = entry.photoThumb { EntryThumbnail(thumb: thumb) { entry.photo } }
+                        times
+                        Spacer(minLength: 8)
+                        chevron
+                    }
+                    .padding(.leading, badge + 12)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    icon
+                    titles
+                    Spacer(minLength: 8)
+                    if let thumb = entry.photoThumb { EntryThumbnail(thumb: thumb) { entry.photo } }
+                    times
+                    chevron
                 }
             }
-            Spacer(minLength: 8)
-            if let thumb = entry.photoThumb {
-                EntryThumbnail(thumb: thumb) { entry.photo }
-            }
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(Format.time(entry.startedAt ?? now))
-                    .font(.mina(.subheadline, weight: .medium))
-                    .foregroundStyle(MinaTheme.textSecondary)
-                if entry.kind == .sleep, let endedAt = entry.endedAt {
-                    Text("to \(Format.time(endedAt))")
-                        .font(.mina(.caption2))
-                        .foregroundStyle(MinaTheme.textMuted)
-                }
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(MinaTheme.textMuted.opacity(0.7))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
+        // One element per row: "Bottle, 4 ounces, by Mom, 10:00 AM". The
+        // photo thumbnail stays reachable as the row's "Photo" action.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Spoken.entry(entry, unit: unit, now: now))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens the entry to edit")
+    }
+
+    private var icon: some View {
+        ZStack {
+            Circle().fill(entry.color.opacity(0.18))
+            Image(systemName: entry.kind.symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(entry.color)
+        }
+        .frame(width: badge, height: badge)
+        .accessibilityHidden(true)
+    }
+
+    private var titles: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(entry.title(unit: unit, now: now))
+                .font(.mina(.body, weight: .medium))
+                .foregroundStyle(MinaTheme.text)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+            if let subtitle = entry.subtitle {
+                Text(subtitle)
+                    .font(.mina(.caption))
+                    .foregroundStyle(MinaTheme.textMuted)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            }
+        }
+    }
+
+    private var times: some View {
+        VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
+            Text(Format.time(entry.startedAt ?? now))
+                .font(.mina(.subheadline, weight: .medium))
+                .foregroundStyle(MinaTheme.textSecondary)
+            if entry.kind == .sleep, let endedAt = entry.endedAt {
+                Text("to \(Format.time(endedAt))")
+                    .font(.mina(.caption2))
+                    .foregroundStyle(MinaTheme.textMuted)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(MinaTheme.textMuted.opacity(0.7))
+            .accessibilityHidden(true)
     }
 }
 

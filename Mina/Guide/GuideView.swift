@@ -11,6 +11,8 @@ struct GuideView: View {
     @ObservedObject var baby: Baby
     @Environment(\.managedObjectContext) private var context
     @StoredVolumeUnit private var unit
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedStageID: String?
     @FetchRequest private var milestones: FetchedResults<LogEntry>
 
@@ -64,7 +66,7 @@ struct GuideView: View {
         let done = Dictionary(uniqueKeysWithValues: milestones.compactMap { entry in entry.label.map { ($0, entry) } })
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "star.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(MinaTheme.warning)
+                Image(systemName: "star.fill").font(.subheadline.weight(.semibold)).foregroundStyle(MinaTheme.warning).accessibilityHidden(true)
                 Text("What she's learning").font(.mina(.headline))
                 Spacer()
                 Text("tap when she does it").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
@@ -76,8 +78,9 @@ struct GuideView: View {
                 } label: {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: entry == nil ? "circle" : "checkmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.body)
                             .foregroundStyle(entry == nil ? MinaTheme.textMuted : MinaTheme.warning)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item)
                                 .font(.mina(.subheadline))
@@ -92,9 +95,15 @@ struct GuideView: View {
                         }
                         Spacer(minLength: 0)
                     }
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item)
+                .accessibilityValue(entry?.startedAt.map { "done, \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "not yet")
+                .accessibilityHint(entry == nil ? "Logs it with today's date" : "Removes it from her log")
+                .accessibilityAddTraits(.isToggle)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,10 +118,10 @@ struct GuideView: View {
                         let isCurrent = candidate.id == currentStage.id
                         let isSelected = candidate.id == stage.id
                         Button {
-                            withAnimation(.snappy) { selectedStageID = candidate.id }
+                            withAnimation(reduceMotion ? nil : .snappy) { selectedStageID = candidate.id }
                         } label: {
                             HStack(spacing: 6) {
-                                if isCurrent { Circle().fill(isSelected ? .white : MinaTheme.accent).frame(width: 6, height: 6) }
+                                if isCurrent { Circle().fill(isSelected ? .white : MinaTheme.accent).frame(width: 6, height: 6).accessibilityHidden(true) }
                                 Text(candidate.title)
                             }
                             .font(.mina(.subheadline, weight: .semibold))
@@ -121,12 +130,15 @@ struct GuideView: View {
                             .background(isSelected ? MinaTheme.accent : MinaTheme.card, in: Capsule())
                             .overlay(Capsule().strokeBorder(isSelected ? .clear : MinaTheme.border, lineWidth: 1))
                             .foregroundStyle(isSelected ? .white : MinaTheme.text)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(isCurrent ? "\(candidate.title), her stage now" : candidate.title)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                         .id(candidate.id)
                     }
                 }
-                .padding(.vertical, 4)
             }
             .onAppear { proxy.scrollTo(currentStage.id, anchor: .center) }
         }
@@ -134,28 +146,28 @@ struct GuideView: View {
 
     private var headlineCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(stage.title).font(.mina(.title2, weight: .bold))
-                Spacer()
-                if stage.id == currentStage.id {
-                    Text(baby.ageDescription())
-                        .font(.mina(.caption, weight: .semibold))
-                        .foregroundStyle(MinaTheme.accent)
-                } else if let days = baby.ageDays(), days < stage.ageDays.lowerBound {
-                    Text("coming up")
-                        .font(.mina(.caption, weight: .semibold))
-                        .foregroundStyle(MinaTheme.textMuted)
-                }
+            let title = Text(stage.title).font(.mina(.title2, weight: .bold))
+            let tag: Text? = stage.id == currentStage.id
+                ? Text(baby.ageDescription()).font(.mina(.caption, weight: .semibold)).foregroundStyle(MinaTheme.accent)
+                : (baby.ageDays().map { $0 < stage.ageDays.lowerBound } ?? false)
+                    ? Text("coming up").font(.mina(.caption, weight: .semibold)).foregroundStyle(MinaTheme.textMuted)
+                    : nil
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) { title; tag }
+            } else {
+                HStack(alignment: .firstTextBaseline) { title; Spacer(); tag }
             }
             Text(stage.headline)
                 .font(.mina(.body))
                 .foregroundStyle(MinaTheme.textSecondary)
             Divider()
-            HStack(spacing: 8) {
-                ExpectChip(label: "Feeds", value: stage.expectation.feedsText(), color: MinaTheme.bottle)
-                ExpectChip(label: "Per feed", value: stage.expectation.perFeedText(unit: unit), color: MinaTheme.bottle)
-                ExpectChip(label: "Wet", value: stage.expectation.wetText() + " a day", color: MinaTheme.diaper)
-                ExpectChip(label: "Sleep", value: stage.expectation.sleepText() + " a day", color: MinaTheme.sleep)
+            // Four chips across; two rows of two once text is large.
+            let chips = [("Feeds", stage.expectation.feedsText(), MinaTheme.bottle), ("Per feed", stage.expectation.perFeedText(unit: unit), MinaTheme.bottle),
+                         ("Wet", stage.expectation.wetText() + " a day", MinaTheme.diaper), ("Sleep", stage.expectation.sleepText() + " a day", MinaTheme.sleep)]
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), alignment: .leading, spacing: 10) {
+                ForEach(chips, id: \.0) { chip in
+                    ExpectChip(label: chip.0, value: chip.1, color: chip.2)
+                }
             }
         }
         .minaCard()
@@ -173,9 +185,11 @@ private struct ExpectChip: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.mina(.caption2, weight: .semibold)).foregroundStyle(color)
             Text(value).font(.mina(.caption, weight: .medium)).foregroundStyle(MinaTheme.text)
-                .lineLimit(2).minimumScaleFactor(0.8)
+                .lineLimit(3).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Spoken.sentence([label, value]))
     }
 }
 
@@ -188,12 +202,12 @@ private struct GuideSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(color)
+                Image(systemName: symbol).font(.subheadline.weight(.semibold)).foregroundStyle(color).accessibilityHidden(true)
                 Text(title).font(.mina(.headline))
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 10) {
-                    Circle().fill(color.opacity(0.7)).frame(width: 6, height: 6).padding(.top, 7)
+                    Circle().fill(color.opacity(0.7)).frame(width: 6, height: 6).padding(.top, 7).accessibilityHidden(true)
                     Text(item)
                         .font(.mina(.subheadline))
                         .foregroundStyle(MinaTheme.textSecondary)

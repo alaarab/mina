@@ -98,6 +98,10 @@ alerts; **Hand off** gives it back. Settings → Who's on → Shifts sets a nigh
 schedule (blocks can cross midnight) that both phones follow. With nothing set,
 both phones get everything. Any number of caregivers can be on the share.
 
+Keep Mina in the background rather than swiping it away: a feed your partner
+logs reaches your phone through a silent push, and that is what moves your
+alarm. A force-quit app gets no pushes until it is opened again.
+
 ## Quiet
 
 The bell on Today pauses this phone: no feed alarm, no feed reminder, no
