@@ -26,6 +26,7 @@ private struct TodayContent: View {
     let now: Date
 
     @Environment(\.managedObjectContext) private var context
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @StoredVolumeUnit private var unit
     /// Read back through `Prefs`, but observed here so the Bottle button's
     /// "Last 4 oz" follows a feed logged by a widget or by Siri.
@@ -108,16 +109,36 @@ private struct TodayContent: View {
         let day = Day(entries: entries, baby: baby, weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context), now: now)
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    statusCard(day)
-                    statsRow(day)
-                    goalsCard(day)
-                    quickLog(day)
-                    timeline(day)
+                Group {
+                    if sizeClass == .regular {
+                        // iPad: the day's state and the buttons on the left, the timeline beside them.
+                        HStack(alignment: .top, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                header
+                                statusCard(day)
+                                statsRow(day)
+                                goalsCard(day)
+                                quickLog(day)
+                            }
+                            .frame(maxWidth: .infinity)
+                            timeline(day)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 8)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            statusCard(day)
+                            statsRow(day)
+                            goalsCard(day)
+                            quickLog(day)
+                            timeline(day)
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                .readableWidth(1100)
             }
             .minaCanvas()
             .navigationTitle(baby.displayName)
@@ -147,13 +168,13 @@ private struct TodayContent: View {
             }
             .sheet(item: $sheet) { sheet in
                 switch sheet {
-                case .bottle: BottleSheet(unit: unit) { log($0) }
-                case .nursing: NursingSheet(onStart: startNursing) { log($0) }
-                case .note: NoteSheet { log($0) }
-                case .extra(let kind): ExtraSheet(kind: kind, unit: unit) { log($0) }
+                case .bottle: BottleSheet(unit: unit) { log($0) }.minaSheet()
+                case .nursing: NursingSheet(onStart: startNursing) { log($0) }.minaSheet()
+                case .note: NoteSheet { log($0) }.minaSheet()
+                case .extra(let kind): ExtraSheet(kind: kind, unit: unit) { log($0) }.minaSheet()
                 }
             }
-            .sheet(item: $editing) { EntryEditor(entry: $0) }
+            .sheet(item: $editing) { EntryEditor(entry: $0).minaSheet() }
             .errorAlert($error)
             .onAppear { scheduleFeedAlerts(day) }
             .onChange(of: entries.count) { _, _ in scheduleFeedAlerts(day) }

@@ -20,14 +20,22 @@ enum Backup {
         var headCM: Double
         var temperatureC: Double
         var label: String?
+        /// The full JPEG, base64 in the JSON (`Data` encodes that way). The
+        /// thumbnail is rebuilt on import when it is missing.
+        var photo: Data?
+        var photoThumb: Data?
     }
 
     struct File: Codable {
-        var version = 1
+        var version = 2
         var app = "Mina"
         var exportedAt = Date.now
         var babyName: String
         var birthDate: Date?
+        /// How many entries carry a picture and how many bytes those add,
+        /// before base64: a file with photos is megabytes, not kilobytes.
+        var photoCount = 0
+        var photoBytes = 0
         var entries: [Entry]
     }
 
@@ -37,9 +45,12 @@ enum Backup {
         let entries = try context.fetch(request).map { entry in
             Entry(id: entry.id ?? UUID(), kind: entry.kind.rawValue, startedAt: entry.startedAt ?? .now, endedAt: entry.endedAt,
                   amountML: entry.amountML, side: entry.sideRaw, diaper: entry.diaperRaw, note: entry.note, loggedBy: entry.loggedBy,
-                  weightGrams: entry.weightGrams, lengthCM: entry.lengthCM, headCM: entry.headCM, temperatureC: entry.temperatureC, label: entry.label)
+                  weightGrams: entry.weightGrams, lengthCM: entry.lengthCM, headCM: entry.headCM, temperatureC: entry.temperatureC, label: entry.label,
+                  photo: entry.photo, photoThumb: entry.photoThumb)
         }
-        return File(babyName: baby.displayName, birthDate: baby.birthDate, entries: entries)
+        let photos = entries.compactMap(\.photo)
+        return File(babyName: baby.displayName, birthDate: baby.birthDate,
+                    photoCount: photos.count, photoBytes: photos.reduce(0) { $0 + $1.count }, entries: entries)
     }
 
     static func exportData(baby: Baby, in context: NSManagedObjectContext) throws -> Data {
@@ -79,6 +90,10 @@ enum Backup {
             entry.headCM = item.headCM
             entry.temperatureC = item.temperatureC
             entry.label = item.label
+            if let photo = item.photo {
+                entry.photo = photo
+                entry.photoThumb = item.photoThumb ?? PhotoStore.prepare(data: photo)?.thumb
+            }
             entry.baby = baby
             if let store = baby.objectID.persistentStore { context.assign(entry, to: store) }
             added += 1

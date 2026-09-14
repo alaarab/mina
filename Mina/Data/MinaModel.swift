@@ -41,6 +41,11 @@ public final class LogEntry: NSManagedObject {
     @NSManaged public var headCM: Double
     @NSManaged public var temperatureC: Double
     @NSManaged public var label: String?
+    /// A full-size JPEG (notes and milestones), kept out of the row as an
+    /// external file so lists never read it; CloudKit carries it as a CKAsset.
+    @NSManaged public var photo: Data?
+    /// A small JPEG of the same picture, inline, for rows and previews.
+    @NSManaged public var photoThumb: Data?
     @NSManaged public var baby: Baby?
 }
 
@@ -128,6 +133,14 @@ enum DiaperKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// A picture ready to store: the full JPEG and the inline thumbnail, both
+/// already downscaled and stripped by `PhotoStore` (app only; the widget
+/// compiles this file and just carries the value).
+struct EntryPhoto: Equatable, Sendable {
+    let full: Data
+    let thumb: Data
+}
+
 // MARK: The model
 
 /// The Core Data model, built in code so there is no .xcdatamodeld to keep in
@@ -142,12 +155,13 @@ enum MinaModel {
         entry.name = "LogEntry"
         entry.managedObjectClassName = "LogEntry"
 
-        func attribute(_ name: String, _ type: NSAttributeType, defaultValue: Any? = nil) -> NSAttributeDescription {
+        func attribute(_ name: String, _ type: NSAttributeType, defaultValue: Any? = nil, external: Bool = false) -> NSAttributeDescription {
             let attribute = NSAttributeDescription()
             attribute.name = name
             attribute.attributeType = type
             attribute.isOptional = true
             attribute.defaultValue = defaultValue
+            attribute.allowsExternalBinaryDataStorage = external
             return attribute
         }
 
@@ -197,6 +211,8 @@ enum MinaModel {
             attribute("headCM", .doubleAttributeType, defaultValue: 0.0),
             attribute("temperatureC", .doubleAttributeType, defaultValue: 0.0),
             attribute("label", .stringAttributeType),
+            attribute("photo", .binaryDataAttributeType, external: true),
+            attribute("photoThumb", .binaryDataAttributeType),
             entryBaby,
         ]
 
@@ -309,7 +325,7 @@ extension LogEntry {
             return "Sleep · \(Format.duration(duration(now: now) ?? 0))"
         case .note:
             let text = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? "Note" : text
+            return text.isEmpty ? (hasPhoto ? "Photo" : "Note") : text
         case .pumping:
             var parts = ["Pumped"]
             if amountML > 0 { parts.append(unit.format(ml: amountML)) }
@@ -348,6 +364,10 @@ extension LogEntry {
         guard let deviceID else { return false }
         return deviceID != Prefs.deviceID
     }
+
+    /// Reads only the inline thumbnail, so a list can ask without pulling
+    /// the full picture off disk.
+    var hasPhoto: Bool { photoThumb != nil }
 }
 
 // `id` is the UUID attribute, set on every insert, which is all Identifiable needs.

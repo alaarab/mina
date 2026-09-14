@@ -39,19 +39,18 @@ struct CalendarView: View {
     @State private var month = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var selected = Calendar.current.startOfDay(for: .now)
     @State private var showingHistory = DebugLaunch.argument("-open") == "history"
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var calendar: Calendar { .current }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    monthHeader
-                    MonthSection(baby: baby, month: month, selected: $selected)
-                        .id(month)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                MonthSection(baby: baby, month: month, selected: $selected, sideBySide: sizeClass == .regular) { monthHeader }
+                    .id(month)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                    .readableWidth(1100)
             }
             .minaCanvas()
             .navigationTitle("Calendar")
@@ -131,10 +130,13 @@ struct CalendarView: View {
 
 // MARK: One month
 
-private struct MonthSection: View {
+private struct MonthSection<Header: View>: View {
     @ObservedObject var baby: Baby
     let month: Date
     @Binding var selected: Date
+    /// iPad: the month grid on the left and the selected day beside it.
+    let sideBySide: Bool
+    let header: Header
 
     @Environment(\.managedObjectContext) private var context
     @StoredVolumeUnit private var unit
@@ -144,10 +146,12 @@ private struct MonthSection: View {
 
     private var calendar: Calendar { .current }
 
-    init(baby: Baby, month: Date, selected: Binding<Date>) {
+    init(baby: Baby, month: Date, selected: Binding<Date>, sideBySide: Bool, @ViewBuilder header: () -> Header) {
         _baby = ObservedObject(wrappedValue: baby)
         self.month = month
         _selected = selected
+        self.sideBySide = sideBySide
+        self.header = header()
         let calendar = Calendar.current
         let start = calendar.date(byAdding: .day, value: -1, to: month) ?? month
         let end = calendar.date(byAdding: .month, value: 1, to: month) ?? month
@@ -157,11 +161,27 @@ private struct MonthSection: View {
     var body: some View {
         let byDay = DayGrouping.byDay(entries, calendar: calendar)
         let now = Date.now
-        VStack(spacing: 16) {
-            grid(byDay: byDay, now: now)
-            dayDetail(byDay[selected] ?? [], now: now)
+        Group {
+            if sideBySide {
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(spacing: 16) {
+                        header
+                        grid(byDay: byDay, now: now)
+                    }
+                    .frame(maxWidth: .infinity)
+                    dayDetail(byDay[selected] ?? [], now: now)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                }
+            } else {
+                VStack(spacing: 16) {
+                    header
+                    grid(byDay: byDay, now: now)
+                    dayDetail(byDay[selected] ?? [], now: now)
+                }
+            }
         }
-        .sheet(item: $editing) { EntryEditor(entry: $0) }
+        .sheet(item: $editing) { EntryEditor(entry: $0).minaSheet() }
         .errorAlert($error, title: "Couldn't delete")
     }
 

@@ -67,6 +67,7 @@ struct TrendsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                .readableWidth(900)
             }
             .minaCanvas()
             .navigationTitle("Trends")

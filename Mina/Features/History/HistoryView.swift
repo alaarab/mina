@@ -69,33 +69,40 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(HistoryFilter.allCases) { candidate in
-                        Button {
-                            withAnimation(.snappy) { filter = candidate }
-                        } label: {
-                            Text(candidate.title)
-                                .font(.mina(.subheadline, weight: .semibold))
-                                .padding(.horizontal, 14).padding(.vertical, 8)
-                                .background(filter == candidate ? MinaTheme.accent : MinaTheme.card, in: Capsule())
-                                .overlay(Capsule().strokeBorder(filter == candidate ? .clear : MinaTheme.border, lineWidth: 1))
-                                .foregroundStyle(filter == candidate ? .white : MinaTheme.text)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(filter == candidate ? .isSelected : [])
-                    }
-                }
-                .padding(.horizontal, 16).padding(.vertical, 10)
+            // Centered in one row when there is room (iPad); a scrolling strip on a phone.
+            ViewThatFits(in: .horizontal) {
+                filterChips.frame(maxWidth: .infinity)
+                ScrollView(.horizontal, showsIndicators: false) { filterChips }
             }
             .background(MinaTheme.canvas)
             HistoryList(baby: baby, filter: filter, query: query)
                 .id("\(filter.rawValue)|\(query)")
+                .readableWidth()
         }
         .minaCanvas()
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search notes, medicine, who logged it…")
+    }
+
+    private var filterChips: some View {
+        HStack(spacing: 8) {
+            ForEach(HistoryFilter.allCases) { candidate in
+                Button {
+                    withAnimation(.snappy) { filter = candidate }
+                } label: {
+                    Text(candidate.title)
+                        .font(.mina(.subheadline, weight: .semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(filter == candidate ? MinaTheme.accent : MinaTheme.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(filter == candidate ? .clear : MinaTheme.border, lineWidth: 1))
+                        .foregroundStyle(filter == candidate ? .white : MinaTheme.text)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(filter == candidate ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 }
 

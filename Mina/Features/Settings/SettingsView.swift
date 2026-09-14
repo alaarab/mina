@@ -291,9 +291,10 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .scrollContentBackground(.hidden)
+            .readableWidth()
             .minaCanvas()
-            .sheet(isPresented: $linkingNanit) { NanitLinkSheet() }
-            .sheet(isPresented: $addingBaby) { AddBabySheet() }
+            .sheet(isPresented: $linkingNanit) { NanitLinkSheet().minaSheet() }
+            .sheet(isPresented: $addingBaby) { AddBabySheet().minaSheet() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
                 do {
                     guard let url = try result.get().first else { return }
@@ -422,6 +423,9 @@ struct ShiftsView: View {
         }
         .navigationTitle("Shifts")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .readableWidth()
+        .minaCanvas()
         .onAppear { blocks = Shifts.blocks(for: baby) }
         .onChange(of: blocks) { _, value in
             do { try Shifts.save(value, to: baby, in: context) } catch { self.error = error.localizedDescription }
@@ -496,6 +500,9 @@ struct GoalsSettingsView: View {
         }
         .navigationTitle("Daily goals")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .readableWidth()
+        .minaCanvas()
         .onAppear {
             let c = Goals.custom(); useCustom = !c.isEmpty
             feeds = c[.feeds] ?? defaults[.feeds] ?? 8; wet = c[.wet] ?? defaults[.wet] ?? 6; dirty = c[.dirty] ?? defaults[.dirty] ?? 3

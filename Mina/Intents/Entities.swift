@@ -21,6 +21,8 @@ struct LogEntryEntity: AppEntity, Identifiable {
     @Property(title: "Summary") var summary: String
     @Property(title: "Amount (ml)") var milliliters: Double
     @Property(title: "Logged by") var loggedBy: String?
+    /// The row thumbnail, for Spotlight only; the full picture never leaves the store.
+    let thumbnail: Data?
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(summary)", subtitle: "\(time.formatted(date: .abbreviated, time: .shortened))")
@@ -28,6 +30,7 @@ struct LogEntryEntity: AppEntity, Identifiable {
 
     init(entry: LogEntry, unit: VolumeUnit) {
         id = entry.id ?? UUID()
+        thumbnail = entry.photoThumb
         kind = entry.kind.title
         time = entry.startedAt ?? .now
         ended = entry.endedAt
@@ -230,6 +233,7 @@ extension LogEntryEntity: IndexedEntity {
         attributes.title = summary
         attributes.contentDescription = "\(kind) at \(time.formatted(date: .abbreviated, time: .shortened))"
         attributes.keywords = [kind, "baby", "log"]
+        attributes.thumbnailData = thumbnail
         return attributes
     }
 }

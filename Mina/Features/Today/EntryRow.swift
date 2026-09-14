@@ -2,7 +2,8 @@ import SwiftUI
 
 /// One logged thing as a row, and the card of rows that Today and Calendar both
 /// build a day out of. The row shows only what an entry already knows how to
-/// say about itself, so a bottle reads the same wherever it appears.
+/// say about itself, so a bottle reads the same wherever it appears. A note or
+/// milestone with a picture shows its thumbnail, which opens the viewer.
 
 struct EntryRow: View {
     @ObservedObject var entry: LogEntry
@@ -32,6 +33,9 @@ struct EntryRow: View {
                 }
             }
             Spacer(minLength: 8)
+            if let thumb = entry.photoThumb {
+                EntryThumbnail(thumb: thumb) { entry.photo }
+            }
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Format.time(entry.startedAt ?? now))
                     .font(.mina(.subheadline, weight: .medium))

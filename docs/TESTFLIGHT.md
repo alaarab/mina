@@ -86,6 +86,7 @@ TestFlight at the same time, then share the log again from the TestFlight app.
 The listing copy lives in `docs/store/listing.md`; `scripts/asc-fill.py` pushes it
 (description, keywords, promo text, URLs, subtitle, categories, copyright) to the
 current App Store version through the API. Screenshots are composed from simulator
-captures (`-seed-demo`) at 1320×2868 with a caption band; the preview is cut from
-the tour recording at 886×1920. Things the API won't set: the review contact phone,
+captures (`-seed-demo`) at 1320×2868 with a caption band, plus a matching iPad set
+(display type `APP_IPAD_PRO_3GEN_129`, 2064×2752 from the iPad Pro 13-inch
+simulator); the preview is cut from the tour recording at 886×1920. Things the API won't set: the review contact phone,
 the App Privacy questionnaire ("Data Not Collected"), pricing, and the Submit button.

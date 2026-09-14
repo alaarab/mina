@@ -218,9 +218,14 @@ final class PartnerAlerts {
             }
             return Message(title: "\(baby) slept \(Format.duration(entry.duration(now: now) ?? 0))", body: "Logged by \(who.lowercased() == "your partner" ? "your partner" : who)")
         case .note:
+            // The picture itself never rides a notification; the text says one is there.
+            if entry.hasPhoto {
+                let text = (entry.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return Message(title: "\(who) added a photo", body: text.isEmpty ? "Open Mina to see it" : clip(text), relevance: 0.3)
+            }
             return Message(title: "\(who) added a note", body: clip(entry.note ?? ""), relevance: 0.3)
         case .milestone:
-            return Message(title: "\(baby) hit a milestone", body: clip("\(entry.label ?? "") · noted by \(who)"), relevance: 0.4)
+            return Message(title: "\(baby) hit a milestone", body: clip("\(entry.label ?? "") · noted by \(who)" + (entry.hasPhoto ? ", with a photo" : "")), relevance: 0.4)
         case .pumping, .growth, .medicine, .tummyTime, .bath, .temperature:
             return Message(title: "\(who) logged \(entry.kind.title.lowercased())",
                            body: clip("\(entry.title(unit: unit, now: now)) at \(at)"), relevance: 0.5)

@@ -26,6 +26,8 @@ struct EntryDraft {
     var headCM: Double = 0
     var temperatureC: Double = 0
     var label: String = ""
+    /// A prepared picture (notes and milestones); nil clears the entry's photo.
+    var photo: EntryPhoto? = nil
 
     init(kind: EntryKind, startedAt: Date = .now) {
         self.kind = kind
@@ -46,6 +48,7 @@ struct EntryDraft {
         headCM = entry.headCM
         temperatureC = entry.temperatureC
         label = entry.label ?? ""
+        if let full = entry.photo, let thumb = entry.photoThumb { photo = EntryPhoto(full: full, thumb: thumb) }
     }
 }
 
@@ -170,6 +173,12 @@ final class Logbook: @unchecked Sendable {
         entry.note = note.isEmpty ? nil : note
         let by = draft.loggedBy.trimmingCharacters(in: .whitespaces)
         entry.loggedBy = by.isEmpty ? nil : by
+        // Compare thumbnails, not the full blobs: reading `entry.photo` pulls
+        // the external file, and a same-thumb picture is the same picture.
+        if entry.photoThumb != draft.photo?.thumb {
+            entry.photo = draft.photo?.full
+            entry.photoThumb = draft.photo?.thumb
+        }
     }
 
     func delete(_ entry: LogEntry, in context: NSManagedObjectContext) throws {
