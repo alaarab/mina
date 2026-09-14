@@ -117,7 +117,7 @@ final class PartnerAlerts {
                     if change.changedObjectID.entity.name == "LogEntry" { inserted.append(change.changedObjectID) }
                 }
             }
-            guard !inserted.isEmpty, Prefs.partnerAlerts else { return }
+            guard !inserted.isEmpty, Prefs.partnerAlerts, !Quiet.isQuiet() else { return }
             if let baby = Logbook.shared.currentBaby(in: context), !Shifts.thisPhoneIsOn(for: baby) { return }
 
             // Only entries that happened recently, judged by when they were logged,

@@ -90,6 +90,13 @@ alerts; **Hand off** gives it back. Settings → Who's on → Shifts sets a nigh
 schedule (blocks can cross midnight) that both phones follow. With nothing set,
 both phones get everything. Any number of caregivers can be on the share.
 
+## Quiet
+
+The bell on Today pauses this phone: no feed alarm, no feed reminder, no
+partner alerts, for an hour, three hours, until 7 AM, or until you turn it
+back on. Settings → Quiet adds a nightly window (10 PM to 7 AM by default).
+Each phone has its own quiet setting; the alarm re-arms itself when quiet ends.
+
 ## Today's goals and the Sunday digest
 
 Today shows goals for her age: feeds, wet and dirty diapers, sleep, and the gap

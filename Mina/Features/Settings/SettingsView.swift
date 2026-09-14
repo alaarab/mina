@@ -28,6 +28,9 @@ struct SettingsView: View {
     @AppStorage(Reminders.feedKey, store: Prefs.defaults) private var feedReminders = false
     @AppStorage(FeedAlarm.onKey, store: Prefs.defaults) private var feedAlarm = false
     @AppStorage(WeeklyDigest.onKey, store: Prefs.defaults) private var weeklyDigest = true
+    @AppStorage(Quiet.hoursOnKey, store: Prefs.defaults) private var quietHours = false
+    @AppStorage(Quiet.hoursStartKey, store: Prefs.defaults) private var quietStart = 22 * 60
+    @AppStorage(Quiet.hoursEndKey, store: Prefs.defaults) private var quietEnd = Quiet.morningHour * 60
     @AppStorage(FeedAlarm.gapKey, store: Prefs.defaults) private var feedAlarmGap = 180
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @ObservedObject private var nanit = NanitSync.shared
@@ -161,6 +164,25 @@ struct SettingsView: View {
                 } footer: {
                     Text("Partner alerts: “Mom fed Mina: 4 oz bottle at 2:15 PM” while the app is in the background. The Sunday digest is one notification with the week's feeds, diapers and sleep, and how it compares to last week. Feed reminders are a normal notification at her predicted next feed. The feed alarm is a real alarm that rings through silent mode and Focus, moves itself every time a feed is logged, and its Log feed button records a bottle at the last amount.")
                 }
+
+                Section {
+                    Toggle("Quiet hours", isOn: $quietHours)
+                        .onChange(of: quietHours) { _, _ in rearmAfterQuietChange() }
+                    if quietHours {
+                        DatePicker("From", selection: minuteBinding($quietStart), displayedComponents: .hourAndMinute)
+                            .onChange(of: quietStart) { _, _ in rearmAfterQuietChange() }
+                        DatePicker("To", selection: minuteBinding($quietEnd), displayedComponents: .hourAndMinute)
+                            .onChange(of: quietEnd) { _, _ in rearmAfterQuietChange() }
+                    }
+                    if let quiet = Quiet.label() {
+                        LabeledContent("Right now", value: quiet)
+                    }
+                } header: {
+                    Text("Quiet")
+                } footer: {
+                    Text("During quiet hours this phone gets no feed alarm, feed reminders or partner alerts. The bell on Today pauses them for an hour, three hours, until morning, or until you turn them back on. Each phone has its own quiet setting.")
+                }
+
 
                 if FeatureFlags.nanit {
                 Section {
@@ -415,6 +437,22 @@ struct ShiftsView: View {
 
 
 // MARK: Goals
+
+extension SettingsView {
+    /// A DatePicker over minutes-after-midnight stored in Prefs.
+    func minuteBinding(_ minutes: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: { Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60, second: 0, of: .now) ?? .now },
+            set: { minutes.wrappedValue = Calendar.current.component(.hour, from: $0) * 60 + Calendar.current.component(.minute, from: $0) })
+    }
+
+    func rearmAfterQuietChange() {
+        let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
+        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+        Reminders.scheduleFeed(Shifts.thisPhoneIsOn(for: baby) ? prediction : nil, babyName: baby.displayName)
+        FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
+    }
+}
 
 struct GoalsSettingsView: View {
     @ObservedObject var baby: Baby
