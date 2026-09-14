@@ -215,7 +215,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Goals")
                 } footer: {
-                    Text("Feeds, wet and dirty diapers, sleep and the longest gap between feeds, judged against the time of day. Targets follow her age unless you set your own, for instance from a pediatrician's plan.")
+                    Text("Feeds, milk by bottle, wet and dirty diapers, sleep and the longest gap between feeds, judged against the time of day. Milk follows her latest logged weight (about 2½ oz per pound a day) once she's a week old. Targets follow her age unless you set your own, for instance from a pediatrician's plan.")
                 }
 
                 Section {
@@ -457,13 +457,16 @@ extension SettingsView {
 struct GoalsSettingsView: View {
     @ObservedObject var baby: Baby
     @State private var feeds = 0.0
+    @State private var volume = 0.0     // display units
     @State private var wet = 0.0
     @State private var dirty = 0.0
     @State private var sleep = 0.0
     @State private var gap = 0.0
     @State private var useCustom = false
 
-    private var defaults: [Goal.Kind: Double] { Goals.targets(for: baby.ageDays().map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays()) }
+    @Environment(\.managedObjectContext) private var context
+    private var unit: VolumeUnit { Prefs.unit }
+    private var defaults: [Goal.Kind: Double] { Goals.targets(for: baby.ageDays().map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context)) }
 
     var body: some View {
         Form {
@@ -475,6 +478,7 @@ struct GoalsSettingsView: View {
             if useCustom {
                 Section("Per day") {
                     Stepper("Feeds: \(Int(feeds))", value: $feeds, in: 1...20)
+                    Stepper("Milk by bottle: \(VolumeUnit.trim(volume)) \(unit.symbol)", value: $volume, in: unit == .ounces ? 4...60 : 100...1800, step: unit == .ounces ? 1 : 10)
                     Stepper("Wet diapers: \(Int(wet))", value: $wet, in: 1...15)
                     Stepper("Dirty diapers: \(Int(dirty))", value: $dirty, in: 0...12)
                     Stepper("Sleep: \(VolumeUnit.trim(sleep)) h", value: $sleep, in: 8...20, step: 0.5)
@@ -482,8 +486,10 @@ struct GoalsSettingsView: View {
                 }
             } else {
                 Section("From her age") {
-                    ForEach([Goal.Kind.feeds, .wet, .dirty, .sleep, .feedGap], id: \.rawValue) { kind in
-                        if let v = defaults[kind] { LabeledContent(label(kind), value: kind == .sleep || kind == .feedGap ? "\(VolumeUnit.trim(v)) h" : "\(Int(v))") }
+                    ForEach([Goal.Kind.feeds, .volume, .wet, .dirty, .sleep, .feedGap], id: \.rawValue) { kind in
+                        if let v = defaults[kind] {
+                            LabeledContent(label(kind), value: kind == .sleep || kind == .feedGap ? "\(VolumeUnit.trim(v)) h" : kind == .volume ? unit.format(ml: v) : "\(Int(v))")
+                        }
                     }
                 }
             }
@@ -493,18 +499,19 @@ struct GoalsSettingsView: View {
         .onAppear {
             let c = Goals.custom(); useCustom = !c.isEmpty
             feeds = c[.feeds] ?? defaults[.feeds] ?? 8; wet = c[.wet] ?? defaults[.wet] ?? 6; dirty = c[.dirty] ?? defaults[.dirty] ?? 3
+            volume = unit.display(ml: c[.volume] ?? defaults[.volume] ?? 600).rounded()
             sleep = c[.sleep] ?? defaults[.sleep] ?? 15; gap = c[.feedGap] ?? defaults[.feedGap] ?? 4
         }
         .onChange(of: useCustom) { _, on in save(on) }
-        .onChange(of: feeds) { _, _ in save(useCustom) }.onChange(of: wet) { _, _ in save(useCustom) }
+        .onChange(of: feeds) { _, _ in save(useCustom) }.onChange(of: volume) { _, _ in save(useCustom) }.onChange(of: wet) { _, _ in save(useCustom) }
         .onChange(of: dirty) { _, _ in save(useCustom) }.onChange(of: sleep) { _, _ in save(useCustom) }.onChange(of: gap) { _, _ in save(useCustom) }
     }
 
     private func label(_ kind: Goal.Kind) -> String {
-        switch kind { case .feeds: return "Feeds"; case .wet: return "Wet diapers"; case .dirty: return "Dirty diapers"; case .sleep: return "Sleep"; case .feedGap: return "Longest feed gap" }
+        switch kind { case .feeds: return "Feeds"; case .volume: return "Milk by bottle"; case .wet: return "Wet diapers"; case .dirty: return "Dirty diapers"; case .sleep: return "Sleep"; case .feedGap: return "Longest feed gap" }
     }
 
     private func save(_ on: Bool) {
-        Goals.setCustom(on ? [.feeds: feeds, .wet: wet, .dirty: dirty, .sleep: sleep, .feedGap: gap] : [:])
+        Goals.setCustom(on ? [.feeds: feeds, .volume: unit.milliliters(fromDisplay: volume), .wet: wet, .dirty: dirty, .sleep: sleep, .feedGap: gap] : [:])
     }
 }

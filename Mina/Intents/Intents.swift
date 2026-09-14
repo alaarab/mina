@@ -262,12 +262,12 @@ struct FeedStatusIntent: AppIntent {
             return .result(dialog: "Yesterday, \(entity.spoken)")
         }
         let now = Date.now
-        let (name, last, lastPoop, summary, ageDays) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, EntrySnapshot?, Date?, DaySummary, Int?) in
+        let (name, last, lastPoop, summary, ageDays, weight) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, EntrySnapshot?, Date?, DaySummary, Int?, Double?) in
             let last = Logbook.shared.lastFeed(for: baby, in: context).map(EntrySnapshot.init)
             let lastPoop = Logbook.shared.lastDirtyDiaper(for: baby, in: context)?.startedAt
             let start = Calendar.current.startOfDay(for: now)
             let entries = Logbook.shared.entries(for: baby, from: Calendar.current.date(byAdding: .day, value: -1, to: start) ?? start, in: context)
-            return (baby.displayName, last, lastPoop, DaySummary(entries: entries, day: now, now: now), baby.ageDays(on: now))
+            return (baby.displayName, last, lastPoop, DaySummary(entries: entries, day: now, now: now), baby.ageDays(on: now), Logbook.shared.latestWeightGrams(for: baby, in: context))
         }
         let stageForAge = ageDays.map(Guidance.stage(forAgeDays:))
         let unit = Prefs.unit
@@ -287,7 +287,7 @@ struct FeedStatusIntent: AppIntent {
             text += ", \(summary.wet) wet and \(summary.dirty) dirty \(summary.diapers == 1 ? "diaper" : "diapers")."
         }
         if let lastPoop { text += " Last poop \(Format.spokenAgo(from: lastPoop, to: now))." }
-        let goals = Goals.evaluate(summary: summary, lastFeed: last?.startedAt, stage: stageForAge, ageDays: ageDays, now: now)
+        let goals = Goals.evaluate(summary: summary, lastFeed: last?.startedAt, stage: stageForAge, ageDays: ageDays, weightGrams: weight, now: now)
         if !goals.isEmpty { text += " Goals: \(Goals.spoken(goals))." }
         return .result(dialog: "\(text)")
     }

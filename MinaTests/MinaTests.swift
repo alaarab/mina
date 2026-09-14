@@ -538,6 +538,15 @@ final class GoalsTests: XCTestCase {
         XCTAssertEqual(atNight.first { $0.kind == .wet }?.status, .short, "3 wet at 10 PM is short")
         XCTAssertEqual(atNight.first { $0.kind == .feedGap }?.status, .short, "4.5h gap at 10 days old is past the wake-to-feed limit")
         XCTAssertNotNil(Goals.concern(atNight, ageDays: 10))
+        // Volume: from the guide before a weight is logged, then 150 ml/kg/day.
+        XCTAssertEqual(Goals.targets(for: stage, ageDays: 20)[.volume], 7 * 90)
+        XCTAssertEqual(Goals.targets(for: stage, ageDays: 20, weightGrams: 4000)[.volume], 600)
+        var bottles = s; bottles.bottleML = 300; bottles.nursingCount = 0
+        let vol = Goals.evaluate(summary: bottles, lastFeed: nil, stage: stage, ageDays: 20, weightGrams: 4000, unit: .ounces, now: night).first { $0.kind == .volume }
+        XCTAssertEqual(vol?.status, .short)
+        XCTAssertTrue(vol?.detail.hasPrefix("10 oz of 20 oz") == true, vol?.detail ?? "")
+        bottles.nursingCount = 3
+        XCTAssertEqual(Goals.evaluate(summary: bottles, lastFeed: nil, stage: stage, ageDays: 20, weightGrams: 4000, now: night).first { $0.kind == .volume }?.status, .onTrack, "a nursed day is never called short on volume")
         Goals.setCustom([.wet: 2]); defer { Goals.setCustom([:]) }
         let custom = Goals.evaluate(summary: s, lastFeed: nil, stage: stage, ageDays: 20, now: night)
         XCTAssertEqual(custom.first { $0.kind == .wet }?.status, .done, "custom target wins")

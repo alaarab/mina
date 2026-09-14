@@ -280,6 +280,14 @@ final class Logbook: @unchecked Sendable {
         return try? context.fetch(request).first
     }
 
+    /// Her most recent recorded weight, in grams, or nil before the first growth entry.
+    func latestWeightGrams(for baby: Baby, in context: NSManagedObjectContext) -> Double? {
+        let request = LogEntry.request()
+        request.predicate = NSPredicate(format: "baby == %@ AND kindRaw == %@ AND weightGrams > 0", baby, EntryKind.growth.rawValue)
+        request.fetchLimit = 1
+        return try? context.fetch(request).first?.weightGrams
+    }
+
     func lastDirtyDiaper(for baby: Baby, in context: NSManagedObjectContext) -> LogEntry? {
         let request = LogEntry.request()
         request.predicate = NSPredicate(format: "baby == %@ AND kindRaw == %@ AND diaperRaw IN %@", baby, EntryKind.diaper.rawValue, [DiaperKind.dirty.rawValue, DiaperKind.both.rawValue])

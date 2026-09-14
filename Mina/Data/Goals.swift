@@ -5,7 +5,7 @@ import Foundation
 /// guide's ranges unless the parent has set their own in Settings (a
 /// pediatrician's plan).
 struct Goal: Identifiable, Equatable {
-    enum Kind: String, CaseIterable { case feeds, wet, dirty, sleep, feedGap }
+    enum Kind: String, CaseIterable { case feeds, volume, wet, dirty, sleep, feedGap }
     enum Status { case onTrack, behind, short, done }
 
     let kind: Kind
@@ -33,14 +33,24 @@ enum Goals {
         Prefs.defaults.set(try? JSONEncoder().encode(raw), forKey: customKey)
     }
 
+    /// The usual intake rule once feeding is established: about 150 ml per kilo a day
+    /// (2½ oz per pound). Below that, and before a weight is logged, the guide's
+    /// per-feed range times its feed count.
+    static let mlPerKiloPerDay = 150.0
+
     /// Whole-day targets for a stage, with any custom overrides applied.
-    static func targets(for stage: GuideStage?, ageDays: Int?) -> [Goal.Kind: Double] {
+    /// `weightGrams` is her latest logged weight; volume scales with it.
+    static func targets(for stage: GuideStage?, ageDays: Int?, weightGrams: Double? = nil) -> [Goal.Kind: Double] {
         var t: [Goal.Kind: Double] = [:]
         if let stage {
             let feeds = stage.expectation.feedsPerDay
             t[.feeds] = Double(feeds.lowerBound)
             t[.wet] = Double(stage.expectation.wetDiapersPerDay)
             t[.sleep] = stage.expectation.sleepHours.lowerBound
+            t[.volume] = Double(feeds.lowerBound) * stage.expectation.mlPerFeed.lowerBound
+        }
+        if let weightGrams, weightGrams > 0, (ageDays ?? 0) >= 7 {
+            t[.volume] = weightGrams / 1000 * mlPerKiloPerDay
         }
         // Dirty diapers: 3+ a day in the first weeks, then it varies too much to be a goal.
         if let ageDays, ageDays < 28 { t[.dirty] = 3 }
@@ -56,8 +66,8 @@ enum Goals {
         return min(1, max(0, now.timeIntervalSince(start) / 86_400))
     }
 
-    static func evaluate(summary: DaySummary, lastFeed: Date?, stage: GuideStage?, ageDays: Int?, now: Date = .now, calendar: Calendar = .current) -> [Goal] {
-        let t = targets(for: stage, ageDays: ageDays)
+    static func evaluate(summary: DaySummary, lastFeed: Date?, stage: GuideStage?, ageDays: Int?, weightGrams: Double? = nil, unit: VolumeUnit = Prefs.unit, now: Date = .now, calendar: Calendar = .current) -> [Goal] {
+        let t = targets(for: stage, ageDays: ageDays, weightGrams: weightGrams)
         let fraction = dayFraction(now: now, calendar: calendar)
         var goals: [Goal] = []
 
@@ -76,6 +86,17 @@ enum Goals {
         if let target = t[.feeds] {
             let v = Double(summary.feeds); let s = status(v, target)
             goals.append(Goal(kind: .feeds, title: "Feeds", value: v, target: target, unit: "feeds", status: s, detail: "\(Int(v)) of \(Int(target)) · \(word(s))"))
+        }
+        if let target = t[.volume] {
+            let v = summary.bottleML
+            // Nursing has no volume, so a nursed day can't be called short on this.
+            var s = status(v, target)
+            if summary.nursingCount > 0, s == .behind || s == .short { s = .onTrack }
+            // Whole ounces read better as a goal than the log's quarter-ounce precision.
+            func whole(_ ml: Double) -> String { "\(VolumeUnit.trim(unit.display(ml: ml).rounded())) \(unit.symbol)" }
+            var detail = "\(whole(v)) of \(whole(target)) · \(word(s))"
+            if summary.nursingCount > 0 { detail = "\(whole(v)) by bottle + \(Format.count(summary.nursingCount, "nursing")) · \(whole(target)) goal" }
+            goals.append(Goal(kind: .volume, title: "Milk", value: v, target: target, unit: unit.symbol, status: s, detail: detail))
         }
         if let target = t[.wet] {
             let v = Double(summary.wet); let s = status(v, target)
@@ -114,6 +135,7 @@ enum Goals {
         let parts = goals.filter { $0.kind != .feedGap }.map { g -> String in
             switch g.kind {
             case .sleep: return "\(Format.spokenDuration(g.value * 3600)) of \(VolumeUnit.trim(g.target)) hours of sleep"
+            case .volume: return "\(VolumeUnit.trim(Prefs.unit.display(ml: g.value).rounded())) of \(VolumeUnit.trim(Prefs.unit.display(ml: g.target).rounded())) \(Prefs.unit == .ounces ? "ounces" : "milliliters")"
             default: return "\(Int(g.value)) of \(Int(g.target)) \(g.unit)"
             }
         }
