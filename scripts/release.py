@@ -81,8 +81,8 @@ if model.exists():
 
 run(["xcodegen", "generate"])
 project = f"{scheme}.xcodeproj"
-# Mina's version is 0.0.<build> so the two numbers never drift; --marketing-version overrides.
-settings = [f"CURRENT_PROJECT_VERSION={build_number}", f"MARKETING_VERSION={args.marketing_version or f'0.0.{build_number}'}",
+# The marketing version comes from project.yml (1.0.0, 1.0.1, ...); only the build number is set here. --marketing-version overrides.
+settings = [f"CURRENT_PROJECT_VERSION={build_number}"] + ([f"MARKETING_VERSION={args.marketing_version}"] if args.marketing_version else []) + [
             f"DEVELOPMENT_TEAM={config['team']}", "CODE_SIGN_STYLE=Automatic"]
 
 if not args.skip_tests:
