@@ -34,10 +34,12 @@ uploads it. Each run auto-increments the build number. It needs one file:
 
 ## Version numbers
 
-The version is `0.0.<build>`, so the two numbers never drift: `release.py`
-sets both from its counter on every upload (`--marketing-version` overrides).
-`project.yml` carries the current pair for local builds. App Store Connect
-rejects a build number it has already seen.
+The version (`MARKETING_VERSION` in `project.yml`: 1.0.0, 1.0.1, ...) is the
+release people see; bump it by hand with a new `CHANGELOG.md` section.
+`release.py` sets only the build number, from its counter, on every upload
+(`--marketing-version` overrides). TestFlight ranks builds by version first,
+so a version must never go backwards. App Store Connect rejects a build number
+it has already seen.
 
 ## Changelog
 
