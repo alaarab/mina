@@ -674,3 +674,26 @@ final class BulkWriteTests: XCTestCase {
         Prefs.selectedBabyID = nil
     }
 }
+
+
+final class QuietTests: XCTestCase {
+    override func tearDown() { Quiet.until = nil; Quiet.hoursOn = false }
+
+    func testPauseAndHours() {
+        let cal = Calendar.current
+        let now = cal.date(bySettingHour: 23, minute: 0, second: 0, of: Date())!
+        XCTAssertFalse(Quiet.isQuiet(at: now))
+        Quiet.until = Quiet.Pause.threeHours.until(from: now)
+        XCTAssertTrue(Quiet.isQuiet(at: now.addingTimeInterval(2 * 3600)))
+        XCTAssertFalse(Quiet.isQuiet(at: now.addingTimeInterval(4 * 3600)))
+        XCTAssertEqual(Quiet.label(now: now), "Quiet until \(Format.time(now.addingTimeInterval(3 * 3600)))")
+        Quiet.until = Quiet.Pause.morning.until(from: now)
+        XCTAssertEqual(cal.component(.hour, from: Quiet.until!), Quiet.morningHour)
+        Quiet.until = nil
+        Quiet.hoursOn = true; Quiet.hoursStart = 22 * 60; Quiet.hoursEnd = 7 * 60
+        XCTAssertTrue(Quiet.isQuiet(at: now), "11 PM is inside 10 PM–7 AM")
+        XCTAssertTrue(Quiet.isQuiet(at: cal.date(bySettingHour: 3, minute: 0, second: 0, of: Date())!))
+        XCTAssertFalse(Quiet.isQuiet(at: cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!))
+        XCTAssertTrue(Quiet.label(now: now)?.hasPrefix("Quiet hours until") == true)
+    }
+}

@@ -36,6 +36,7 @@ private struct TodayContent: View {
     @State private var error: String?
     @State private var asking = DebugLaunch.argument("-open") == "ask"
     @State private var dismissedPromptTick = 0
+    @State private var quietTick = 0
 
     init(baby: Baby, now: Date) {
         _baby = ObservedObject(wrappedValue: baby)
@@ -123,6 +124,22 @@ private struct TodayContent: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button { asking = true } label: { Label("Ask", systemImage: "sparkles") }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        if Quiet.label(now: now) != nil {
+                            Button("Turn alerts back on", systemImage: "bell.fill") { resumeAlerts() }
+                        } else {
+                            Section("Quiet this phone for") {
+                                ForEach(Quiet.Pause.allCases) { pause in
+                                    Button(pause.title) { Quiet.pause(pause, now: now); quietTick &+= 1 }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Quiet", systemImage: Quiet.label(now: now) != nil ? "bell.slash.fill" : "bell")
+                    }
+                    .id(quietTick)
+                }
             }
             .sheet(isPresented: $asking) {
                 AskView(baby: baby, stats: TrendMath.stats(entries: Array(entries), days: 2, now: now), recent: entries.prefix(12).map { "\(($0.startedAt ?? now).formatted(.dateTime.weekday(.abbreviated).hour().minute())): \($0.title(unit: unit, now: now))" }, unit: unit)
@@ -167,6 +184,20 @@ private struct TodayContent: View {
 
     private func statusCard(_ day: Day) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if quietTick >= 0, let quiet = Quiet.label(now: now) {
+                HStack(spacing: 12) {
+                    Image(systemName: "bell.slash.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.textMuted).frame(width: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(quiet).font(.mina(.headline))
+                        Text("No alarm, reminders or partner alerts on this phone").font(.mina(.subheadline)).foregroundStyle(MinaTheme.textSecondary)
+                    }
+                    Spacer()
+                    if Quiet.until != nil {
+                        Button("Resume") { resumeAlerts() }.buttonStyle(.bordered).font(.mina(.subheadline, weight: .semibold))
+                    }
+                }
+                Divider()
+            }
             if dismissedPromptTick >= 0, let dismissed = FeedAlarm.pendingDismissal, day.lastFeed.map({ ($0.startedAt ?? .distantPast) < dismissed }) ?? true {
                 HStack(spacing: 12) {
                     Image(systemName: "alarm.fill").font(.system(size: 20)).foregroundStyle(MinaTheme.warning).frame(width: 32)
@@ -488,6 +519,17 @@ private struct TodayContent: View {
     }
 
     // MARK: Actions
+
+    private func resumeAlerts() {
+        Quiet.resume()
+        quietTick &+= 1
+        let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
+        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+        if Shifts.thisPhoneIsOn(for: baby, at: now) {
+            Reminders.scheduleFeed(prediction, babyName: baby.displayName, now: now)
+            FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, now: now, force: true)
+        }
+    }
 
     private func scheduleFeedAlerts(_ day: Day) {
         let on = Shifts.thisPhoneIsOn(for: baby, at: now)

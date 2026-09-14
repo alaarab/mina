@@ -67,6 +67,8 @@ enum FeedAlarm {
             guard isOn, let date = fireDate(lastFeed: lastFeed, prediction: prediction, now: now), date > now.addingTimeInterval(60) else {
                 Prefs.defaults.set(lastFeed, forKey: armedForKey); return
             }
+            // Quiet at ring time: skip, and leave nothing armed so the first refresh after quiet ends arms it.
+            guard !Quiet.isQuiet(at: date) else { Prefs.defaults.removeObject(forKey: armedForKey); return }
             do {
                 let status = try await manager.requestAuthorization()
                 guard status == .authorized else { return }

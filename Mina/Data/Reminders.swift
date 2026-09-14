@@ -18,7 +18,7 @@ enum Reminders {
     static func scheduleFeed(_ prediction: FeedPrediction?, babyName: String, now: Date = .now) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [feedIdentifier])
-        guard feedRemindersOn, let prediction, prediction.expectedAt > now.addingTimeInterval(60) else { return }
+        guard feedRemindersOn, let prediction, prediction.expectedAt > now.addingTimeInterval(60), !Quiet.isQuiet(at: prediction.expectedAt) else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(babyName) is probably getting hungry"
         content.body = "Last feed was \(Format.duration(prediction.interval)) ago, going by \(prediction.basis)."
