@@ -59,7 +59,7 @@ private struct TodayContent: View {
         var goals: [Goal] = []
         var sections: [(day: Date, entries: [LogEntry])] = []
 
-        init(entries: FetchedResults<LogEntry>, baby: Baby, now: Date) {
+        init(entries: FetchedResults<LogEntry>, baby: Baby, weightGrams: Double?, now: Date) {
             let all = Array(entries)
             var feedTimes: [Date] = []
             var lastWake: Date?
@@ -86,7 +86,7 @@ private struct TodayContent: View {
             stage = ageDays.map(Guidance.stage(forAgeDays:))
             feedPrediction = Predictor.nextFeed(feedTimes: feedTimes, stage: stage, now: now)
             napPrediction = sleeping == nil ? Predictor.nextNap(lastWake: lastWake, ageDays: ageDays, now: now) : nil
-            goals = Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: ageDays, now: now)
+            goals = Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: ageDays, weightGrams: all.first { $0.kind == .growth && $0.weightGrams > 0 }?.weightGrams ?? weightGrams, now: now)
             sections = DayGrouping.days(all, missing: now)
         }
     }
@@ -104,7 +104,8 @@ private struct TodayContent: View {
         // once here rather than per subview: this runs every minute and on
         // every change, and the old computed properties walked the entries
         // half a dozen times each pass.
-        let day = Day(entries: entries, baby: baby, now: now)
+        // Her latest weight rarely changes; the fetch covers only two days, so look it up once per body.
+        let day = Day(entries: entries, baby: baby, weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context), now: now)
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -691,7 +692,7 @@ struct GoalRing: View {
     private var color: Color {
         if status == .short { return MinaTheme.warning }
         switch kind {
-        case .feeds, .feedGap: return MinaTheme.bottle
+        case .feeds, .feedGap, .volume: return MinaTheme.bottle
         case .wet: return MinaTheme.diaper
         case .dirty: return MinaTheme.diaperDirty
         case .sleep: return MinaTheme.sleep

@@ -41,9 +41,13 @@ struct MinaSnapshot {
             snapshot.dirty = summary.dirty
             snapshot.sleepSeconds = summary.sleepSeconds
             snapshot.sleepingSince = Logbook.shared.ongoingSleep(for: baby, in: context)?.startedAt
-            let goals = Goals.evaluate(summary: summary, lastFeed: snapshot.lastFeedAt, stage: baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(on: now), now: now)
+            let goals = Goals.evaluate(summary: summary, lastFeed: snapshot.lastFeedAt, stage: baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(on: now), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context), now: now)
             snapshot.goalLine = goals.filter { $0.kind != .feedGap && $0.kind != .dirty }.map { g in
-                g.kind == .sleep ? "\(Format.duration(g.value * 3600))/\(VolumeUnit.trim(g.target))h" : "\(Int(g.value))/\(Int(g.target)) \(g.unit)"
+                switch g.kind {
+                case .sleep: return "\(Format.duration(g.value * 3600))/\(VolumeUnit.trim(g.target))h"
+                case .volume: return "\(VolumeUnit.trim(Prefs.unit.display(ml: g.value).rounded()))/\(VolumeUnit.trim(Prefs.unit.display(ml: g.target).rounded())) \(g.unit)"
+                default: return "\(Int(g.value))/\(Int(g.target)) \(g.unit)"
+                }
             }.joined(separator: " · ")
         }
         return snapshot

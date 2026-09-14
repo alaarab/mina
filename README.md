@@ -99,7 +99,8 @@ Each phone has its own quiet setting; the alarm re-arms itself when quiet ends.
 
 ## Today's goals and the Sunday digest
 
-Today shows goals for her age: feeds, wet and dirty diapers, sleep, and the gap
+Today shows goals for her age: feeds, milk by bottle (about 2½ oz per pound a
+day from her latest logged weight), wet and dirty diapers, sleep, and the gap
 since the last feed (the wake-to-feed limit in the first two weeks). The rings
 know what time of day it is, so three wet diapers at noon is on track and three
 at 10 PM is short, and the day's one worry, if any, is spelled out the way the
