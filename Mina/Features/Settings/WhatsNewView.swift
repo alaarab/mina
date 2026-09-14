@@ -78,6 +78,7 @@ struct WhatsNewView: View {
                     }
                 }
                 .padding(16)
+                .readableWidth()
             }
             .minaCanvas()
             .navigationTitle(onlyNewest ? "" : "What's new")

@@ -107,6 +107,7 @@ struct AskView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .readableWidth()
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) { _, _ in
@@ -233,6 +234,7 @@ struct AskView: View {
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 8)
+        .readableWidth()
         .background(MinaTheme.canvas.ignoresSafeArea(.container, edges: .bottom))
     }
 

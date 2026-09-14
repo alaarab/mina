@@ -232,6 +232,7 @@ struct NoteSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var when = Date.now
+    @State private var photo: EntryPhoto?
 
     var body: some View {
         NavigationStack {
@@ -240,6 +241,9 @@ struct NoteSheet: View {
                     .lineLimit(3...8)
                     .font(.mina(.body))
                     .minaCard()
+                // A photo on its own is a note too: the rash, the diaper for the doctor.
+                PhotoAttachment(photo: $photo, tint: MinaTheme.note)
+                    .minaCard()
                 DatePicker("When", selection: $when, in: ...Date.now.addingTimeInterval(60), displayedComponents: [.date, .hourAndMinute])
                     .font(.mina(.body))
                     .minaCard()
@@ -247,6 +251,7 @@ struct NoteSheet: View {
                 Button {
                     var draft = EntryDraft(kind: .note, startedAt: when)
                     draft.note = text
+                    draft.photo = photo
                     onSave(draft)
                     dismiss()
                 } label: {
@@ -255,7 +260,7 @@ struct NoteSheet: View {
                 .buttonStyle(.borderedProminent)
                 .tint(MinaTheme.note)
                 .controlSize(.large)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil)
             }
             .padding(20)
             .minaCanvas()
@@ -424,6 +429,11 @@ struct EntryEditor: View {
                 }
                 Section(draft.kind == .note ? "Note" : "Note (optional)") {
                     TextField("Note", text: $draft.note, axis: .vertical).lineLimit(1...6)
+                }
+                if draft.kind == .note || draft.kind == .milestone {
+                    Section("Photo") {
+                        PhotoAttachment(photo: $draft.photo, tint: draft.kind.color)
+                    }
                 }
                 Section {
                     Button("Delete entry", role: .destructive) { confirmDelete = true }

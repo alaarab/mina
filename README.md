@@ -5,7 +5,7 @@ widget, or by telling Siri; shared through iCloud so every caregiver sees the
 same log; a feed alarm and a "who's on" handoff for the nights; a calendar and
 searchable history to look back; an age-based guide for what to expect; and an
 on-device Ask that answers questions about her log without anything leaving the
-phone. Free, open source, no accounts, no servers.
+phone. Free, open source, no accounts, no servers. Mina runs on iPad too, in any orientation.
 
 Website and privacy policy: https://alaarab.github.io/mina/ · App Store listing copy: [docs/store/listing.md](docs/store/listing.md)
 
@@ -73,6 +73,14 @@ inches and °F by default; or kg, cm and °C), separate from bottle amounts.
 
 Every entry can be opened from any list to fix the amount, the time (with
 ±5/15/30 minute nudges), the side, or delete it.
+
+**Photos.** A note or a milestone can carry one picture, from the camera or the
+photo library: a keepsake, or the rash and the diaper you want to show the
+doctor. The thumbnail sits on the row on Today, the calendar and History; tap it
+to see the picture full screen, pinch to zoom, and share the JPEG. Pictures are
+downscaled to 1600 px and stripped of every bit of camera metadata (location,
+time, device) before they are saved, then sync through iCloud with the rest of
+the log. Widgets never show them.
 
 ## Feed alarm and partner pushes
 
@@ -146,7 +154,9 @@ Settings → Backup exports every entry as a JSON file (AirDrop it, keep it in
 Files) and imports one back, adding only entries that aren't already there, so
 importing twice or importing a partner's file never duplicates. Do this before
 switching between a development build and a TestFlight build: they use
-different iCloud environments and don't see each other's data.
+different iCloud environments and don't see each other's data. Photos go in the
+file too, as base64 JPEGs, so a log with pictures makes a file of megabytes
+rather than kilobytes; the file's `photoCount` and `photoBytes` say how much.
 
 ## Predictions, trends, milestones
 

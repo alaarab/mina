@@ -1,4 +1,7 @@
 import CoreData
+import ImageIO
+import UIKit
+import UniformTypeIdentifiers
 import XCTest
 @testable import Mina
 
@@ -404,6 +407,168 @@ final class DayGroupingTests: XCTestCase {
         XCTAssertEqual(DayGrouping.days([orphan], missing: day, calendar: calendar).first?.day, day)
         XCTAssertEqual(DayGrouping.days([orphan], calendar: calendar).first?.day,
                        calendar.startOfDay(for: .distantPast), "the default puts it at the far end of the list")
+    }
+}
+
+
+final class PhotoTests: XCTestCase {
+    /// A big landscape image drawn in code, so the test owns every pixel. The
+    /// renderer's default format is left alone on purpose: on a wide-gamut
+    /// simulator it is 16-bit extended range, the shape a real camera frame
+    /// can arrive in, and `prepare` has to cope.
+    private func drawnImage(width: CGFloat, height: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            UIColor.systemPink.setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: width * 0.2, y: height * 0.2, width: width * 0.6, height: height * 0.6))
+            for x in stride(from: 0, to: width, by: 37) {
+                UIColor(white: Double(Int(x) % 7) / 7, alpha: 0.5).setFill()
+                context.fill(CGRect(x: x, y: 0, width: 9, height: height))
+            }
+        }
+    }
+
+    /// The image as a camera would save it: a JPEG carrying GPS, capture time and the device.
+    private func jpegWithLocation(_ image: UIImage) throws -> Data {
+        let output = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil))
+        let properties: [CFString: Any] = [
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 37.3349, kCGImagePropertyGPSLatitudeRef: "N",
+                                            kCGImagePropertyGPSLongitude: 122.009, kCGImagePropertyGPSLongitudeRef: "W"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifDateTimeOriginal: "2026:09:13 03:10:00", kCGImagePropertyExifLensModel: "Wide camera"],
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Apple", kCGImagePropertyTIFFModel: "iPhone"],
+        ]
+        CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), properties as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return output as Data
+    }
+
+    func testPrepareDownscalesAndKeepsAspect() throws {
+        let prepared = try XCTUnwrap(PhotoStore.prepare(drawnImage(width: 4032, height: 3024)))
+        let full = try XCTUnwrap(PhotoStore.pixelSize(of: prepared.full))
+        XCTAssertEqual(full.width, 1600)
+        XCTAssertEqual(full.height, 1200)
+        let thumb = try XCTUnwrap(PhotoStore.pixelSize(of: prepared.thumb))
+        XCTAssertEqual(thumb.width, 200)
+        XCTAssertEqual(thumb.height, 150)
+        XCTAssertLessThanOrEqual(prepared.thumb.count, PhotoStore.thumbMaxBytes, "thumbnail must stay small enough to live inline in every row")
+        XCTAssertGreaterThan(prepared.full.count, 10_000, "a real encode, not a header stub")
+        XCTAssertLessThan(prepared.full.count, 2_000_000)
+
+        // Portrait keeps the long side on the height; a small image is not enlarged.
+        let portrait = try XCTUnwrap(PhotoStore.prepare(drawnImage(width: 600, height: 2400)))
+        XCTAssertEqual(PhotoStore.pixelSize(of: portrait.full), CGSize(width: 400, height: 1600))
+        let small = try XCTUnwrap(PhotoStore.prepare(drawnImage(width: 320, height: 240)))
+        XCTAssertEqual(PhotoStore.pixelSize(of: small.full), CGSize(width: 320, height: 240))
+    }
+
+    func testPrepareStripsLocationAndCameraMetadata() throws {
+        let original = try jpegWithLocation(drawnImage(width: 2000, height: 1500))
+        let before = PhotoStore.metadata(of: original)
+        XCTAssertNotNil(before["{GPS}"], "the fixture must carry GPS for the test to mean anything")
+        XCTAssertEqual(before["{TIFF}"]?["Make"] as? String, "Apple")
+        XCTAssertEqual(PhotoStore.pixelSize(of: original), CGSize(width: 2000, height: 1500), "the fixture must be a whole JPEG")
+
+        let prepared = try XCTUnwrap(PhotoStore.prepare(data: original))
+        XCTAssertEqual(PhotoStore.pixelSize(of: prepared.full), CGSize(width: 1600, height: 1200))
+        for (name, data) in [("full", prepared.full), ("thumb", prepared.thumb)] {
+            let after = PhotoStore.metadata(of: data)
+            XCTAssertNotNil(PhotoStore.pixelSize(of: data), "\(name) must still be a readable JPEG")
+            XCTAssertNil(after["{GPS}"], "\(name) still has a GPS block")
+            XCTAssertNil(after["{TIFF}"], "\(name) still has a TIFF block")
+            XCTAssertNil(after["{IPTC}"], "\(name) has an IPTC block")
+            XCTAssertNil(after["{MakerApple}"], "\(name) has Apple maker notes")
+            // ImageIO always records the pixel size and colour space in an Exif block; nothing else may be there.
+            let exifKeys = Set((after["{Exif}"] ?? [:]).keys)
+            XCTAssertTrue(exifKeys.isSubset(of: ["PixelXDimension", "PixelYDimension", "ColorSpace"]), "\(name) Exif keys: \(exifKeys.sorted())")
+        }
+
+        // The standalone strip does the same for bytes that are already the right size.
+        let stripped = try XCTUnwrap(PhotoStore.strippingMetadata(original))
+        XCTAssertNil(PhotoStore.metadata(of: stripped)["{GPS}"])
+        XCTAssertEqual(PhotoStore.pixelSize(of: stripped), CGSize(width: 2000, height: 1500))
+    }
+
+    func testDraftCarriesPhotoIntoTheStoreAndMerge() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let photo = try XCTUnwrap(PhotoStore.prepare(drawnImage(width: 800, height: 600)))
+        var draft = EntryDraft(kind: .note)
+        draft.photo = photo
+        let entry = try logbook.add(draft, to: baby, in: context)
+        XCTAssertTrue(entry.hasPhoto)
+        XCTAssertEqual(entry.photo, photo.full)
+        XCTAssertEqual(entry.title(unit: .ounces), "Photo", "a note with only a picture is titled as one")
+        XCTAssertTrue(PartnerAlerts.message(for: entry, unit: .ounces).title.hasSuffix("added a photo"))
+
+        // Editing without touching the photo keeps it; clearing removes both blobs.
+        var edit = EntryDraft(entry: entry)
+        edit.note = "Rash on her cheek"
+        logbook.apply(edit, to: entry)
+        XCTAssertEqual(entry.photoThumb, photo.thumb)
+        edit.photo = nil
+        logbook.apply(edit, to: entry)
+        XCTAssertNil(entry.photo)
+        XCTAssertNil(entry.photoThumb)
+
+        // Merging a local log into a shared one brings the picture along.
+        edit.photo = photo
+        logbook.apply(edit, to: entry)
+        try context.save()
+        let shared = try logbook.createBaby(name: "Shared", birthDate: .now, in: context)
+        XCTAssertEqual(try logbook.merge(baby, into: shared, in: context), 1)
+        let moved = logbook.entries(for: shared, from: .distantPast, in: context)
+        XCTAssertEqual(moved.first?.photo, photo.full)
+        XCTAssertEqual(moved.first?.photoThumb, photo.thumb)
+        Prefs.selectedBabyID = nil
+    }
+
+    func testBackupRoundTripsPhotos() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test", birthDate: .now, in: context)
+        let photo = try XCTUnwrap(PhotoStore.prepare(drawnImage(width: 800, height: 600)))
+        var note = EntryDraft(kind: .note)
+        note.note = "First smile"
+        note.photo = photo
+        try logbook.add(note, to: baby, in: context)
+        try logbook.add(EntryDraft(kind: .diaper), to: baby, in: context)
+
+        let data = try Backup.exportData(baby: baby, in: context)
+        let file = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(file?["photoCount"] as? Int, 1)
+        XCTAssertEqual(file?["photoBytes"] as? Int, photo.full.count)
+        XCTAssertEqual(file?["version"] as? Int, 2)
+
+        let other = PersistenceController(inMemory: true)
+        let target = try Logbook(persistence: other).createBaby(name: "Test", birthDate: .now, in: other.container.viewContext)
+        XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 2)
+        let imported = Logbook(persistence: other).entries(for: target, from: .distantPast, in: other.container.viewContext)
+        let restored = try XCTUnwrap(imported.first { $0.kind == .note })
+        XCTAssertEqual(restored.photo, photo.full)
+        XCTAssertEqual(restored.photoThumb, photo.thumb)
+        XCTAssertNil(imported.first { $0.kind == .diaper }?.photoThumb)
+
+        // A file written by hand with only the full picture gets its thumbnail rebuilt.
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var entries = try XCTUnwrap(json["entries"] as? [[String: Any]])
+        for index in entries.indices {
+            entries[index]["photoThumb"] = nil
+            entries[index]["id"] = UUID().uuidString
+        }
+        json["entries"] = entries
+        let third = PersistenceController(inMemory: true)
+        let again = try Logbook(persistence: third).createBaby(name: "Test", birthDate: .now, in: third.container.viewContext)
+        XCTAssertEqual(try Backup.importData(try JSONSerialization.data(withJSONObject: json), into: again, in: third.container.viewContext), 2)
+        let rebuilt = Logbook(persistence: third).entries(for: again, from: .distantPast, in: third.container.viewContext).first { $0.kind == .note }
+        XCTAssertNotNil(rebuilt?.photoThumb)
+        XCTAssertLessThanOrEqual(rebuilt?.photoThumb?.count ?? .max, PhotoStore.thumbMaxBytes)
     }
 }
 

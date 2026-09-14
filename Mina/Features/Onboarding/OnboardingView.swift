@@ -76,6 +76,7 @@ struct OnboardingView: View {
                     .minaCard()
                 }
                 .padding(20)
+                .readableWidth(560)
             }
             .minaCanvas()
             .errorAlert($error)

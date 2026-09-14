@@ -9,6 +9,7 @@ what an attacker gets in the three cases worth worrying about.
 | Data | Where it lives |
 | --- | --- |
 | Entries, baby name and birthday | `Mina.sqlite` / `Mina-shared.sqlite` in the App Group container `group.com.alaarab.mina`, and in the user's own iCloud (CloudKit container `iCloud.com.alaarab.mina`) |
+| Photos on notes and milestones | The same stores (the full picture as an external file next to the SQLite, the thumbnail in the row) and the same private or shared CloudKit database, where the full picture is a `CKAsset` |
 | Settings: units, your name, partner alerts on/off, device id, last bottle | `UserDefaults` in the same App Group |
 | Nanit sign-in token, if a camera is connected | Keychain, service `com.alaarab.mina.nanit` |
 | Nanit password | Nowhere. It is held in memory on the link sheet only for the two calls the login needs, then cleared |
@@ -76,6 +77,14 @@ the session is written outside the Keychain. Requests time out at 20 seconds.
   non-synchronisable forms, for items written by older builds), the camera, the
   processed message ids, the seen type list and the scheduled background
   refresh.
+- Photos are re-rendered before they are stored: at most 1600 px on the long
+  side, written from a bare bitmap, so the GPS, Exif and TIFF blocks a camera
+  embeds (where and when it was taken, on which phone) never reach the store or
+  the partner's phone. They live in the private or shared CloudKit database like
+  every other entry and never leave iCloud; a partner alert says "added a photo"
+  and carries no image; Spotlight gets the thumbnail only; widgets get nothing.
+  Sharing a picture from the viewer is an explicit act that hands the stripped
+  JPEG to the share sheet.
 - Partner notifications carry the baby's name and the entry, by design: that is
   the feature. They use `interruptionLevel = .active`, so they never break
   through a Focus, and free note text is cut to 120 characters so a long private

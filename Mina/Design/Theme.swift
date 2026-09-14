@@ -71,8 +71,42 @@ struct MinaCard: ViewModifier {
     }
 }
 
+/// Keeps scroll content readable on an iPad: past `max` points the column
+/// stops growing and sits centered, so cards never stretch across a 13-inch
+/// screen. On a phone (compact width) it does nothing at all.
+struct ReadableWidth: ViewModifier {
+    var max: CGFloat
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    func body(content: Content) -> some View {
+        if sizeClass == .regular {
+            content
+                .padding(.horizontal, 8)
+                .frame(maxWidth: max)
+                .frame(maxWidth: .infinity)
+        } else {
+            content
+        }
+    }
+}
+
 extension View {
     func minaCard(padding: CGFloat = 16) -> some View { modifier(MinaCard(padding: padding)) }
+
+    /// Centers content in a column no wider than `max` on regular-width
+    /// screens (iPad). Apply to a scroll view's content, or to a `Form`.
+    func readableWidth(_ max: CGFloat = 680) -> some View { modifier(ReadableWidth(max: max)) }
+
+    /// A sheet that presents as a centered form on iPad (iOS 18+) instead of
+    /// a full-height page sheet; unchanged on iPhone and on iOS 17.
+    @ViewBuilder
+    func minaSheet() -> some View {
+        if #available(iOS 18.0, *) {
+            presentationSizing(.form)
+        } else {
+            self
+        }
+    }
 
     /// The warm page background every full screen and sheet sits on.
     func minaCanvas() -> some View { background(MinaTheme.canvas.ignoresSafeArea()) }

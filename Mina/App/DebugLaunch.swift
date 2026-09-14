@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import UIKit
 
 /// Debug-only launch arguments: `-seed-demo` fills a fresh store with a
 /// realistic day, `-tab calendar|guide|settings` opens on that tab. Used for
@@ -69,7 +70,8 @@ enum DebugLaunch {
             for day in stride(from: 3, to: days, by: 7) { try add(.growth, day: day, hour: 10) { $0.weightGrams = 3400 + Double(days - day) * 28 } }
             for day in stride(from: 0, to: days, by: 1) where day % 5 == 0 { try add(.medicine, day: day, hour: 8) { $0.label = "Vitamin D · 400 IU" } }
             try add(.note, day: 1, hour: 15) { $0.note = "Vitamin D drops" }
-            try add(.note, day: 3, hour: 11) { $0.note = "First real smile at Mom" }
+            try add(.note, day: 3, hour: 11) { $0.note = "First real smile at Mom"; $0.photo = demoPhoto(seed: 2) }
+            try add(.note, day: 0, hour: 14.2) { $0.note = "Rash on her cheek, for Dr. Lee"; $0.photo = demoPhoto(seed: 1) }
             try add(.sleep, day: 0, hour: Double(calendar.component(.hour, from: now)) - 0.7)
             try context.save()
             logbook.didChangeEntries(for: baby, in: context)
@@ -78,4 +80,24 @@ enum DebugLaunch {
         }
         #endif
     }
+
+    #if DEBUG
+    /// A soft "photo" drawn in code (no bundled picture, nothing to license),
+    /// run through the same preparation as a real one.
+    private static func demoPhoto(seed: Int) -> EntryPhoto? {
+        let size = CGSize(width: 1200, height: 900)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            let colors: [UIColor] = seed == 1
+                ? [UIColor(red: 0.98, green: 0.85, blue: 0.78, alpha: 1), UIColor(red: 0.93, green: 0.62, blue: 0.55, alpha: 1)]
+                : [UIColor(red: 0.80, green: 0.88, blue: 0.98, alpha: 1), UIColor(red: 0.55, green: 0.66, blue: 0.90, alpha: 1)]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors.map(\.cgColor) as CFArray, locations: [0, 1])!
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+            UIColor.white.withAlphaComponent(0.7).setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: size.width * 0.3, y: size.height * 0.22, width: size.width * 0.4, height: size.width * 0.4))
+            UIColor(red: 0.85, green: 0.45, blue: 0.4, alpha: 0.6).setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: size.width * 0.52, y: size.height * 0.5, width: 90, height: 70))
+        }
+        return PhotoStore.prepare(image)
+    }
+    #endif
 }

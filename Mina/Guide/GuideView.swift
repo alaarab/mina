@@ -50,6 +50,7 @@ struct GuideView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                .readableWidth()
             }
             .minaCanvas()
             .navigationTitle("Guide")
