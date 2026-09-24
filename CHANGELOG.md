@@ -2,6 +2,19 @@
 
 Newest first. The version is the release (1.0.0, 1.0.1, ...); the build number counts uploads. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
+## 1.1.0
+
+### New
+- Apple Watch: log a bottle, pee, poop or sleep, and glance at the last feed and running sleep timer.
+- Nursing and sleep timers on the Lock Screen and Dynamic Island.
+- Siri can undo your latest recent entry.
+- Track stored milk, solid foods and common allergens.
+- Growth percentiles, checkup and vaccine reminders, and CSV export.
+- Optional dim appearance for night feeds.
+
+### Fixed
+- Deleting an entry refreshes feed alarms and summaries.
+
 ## 1.0.1
 
 ### New

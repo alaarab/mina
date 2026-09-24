@@ -226,7 +226,7 @@ final class PartnerAlerts {
             return Message(title: "\(who) added a note", body: clip(entry.note ?? ""), relevance: 0.3)
         case .milestone:
             return Message(title: "\(baby) hit a milestone", body: clip("\(entry.label ?? "") · noted by \(who)" + (entry.hasPhoto ? ", with a photo" : "")), relevance: 0.4)
-        case .pumping, .growth, .medicine, .tummyTime, .bath, .temperature:
+        case .pumping, .growth, .medicine, .tummyTime, .bath, .temperature, .stash, .solid, .vaccine, .checkup:
             return Message(title: "\(who) logged \(entry.kind.title.lowercased())",
                            body: clip("\(entry.title(unit: unit, now: now)) at \(at)"), relevance: 0.5)
         }

@@ -366,16 +366,25 @@ struct EntryEditor: View {
     @State private var confirmDelete = false
     @State private var error: String?
     @State private var saved = 0
+    @State private var stashAdding: Bool
+    @State private var solidFood: String
+    @State private var solidAllergens: Set<String>
+
+    private static let commonAllergens = ["Milk", "Egg", "Peanut", "Tree nut", "Soy", "Wheat", "Sesame", "Fish", "Shellfish"]
 
     init(entry: LogEntry) {
         _entry = ObservedObject(wrappedValue: entry)
         let draft = EntryDraft(entry: entry)
         _draft = State(initialValue: draft)
-        _amountDisplay = State(initialValue: Prefs.unit.display(ml: draft.amountML))
+        _amountDisplay = State(initialValue: Prefs.unit.display(ml: abs(draft.amountML)))
         let seconds = (draft.endedAt ?? draft.startedAt).timeIntervalSince(draft.startedAt)
         _minutes = State(initialValue: max(1, Int((seconds / 60).rounded())))
         _ongoing = State(initialValue: draft.kind == .sleep && draft.endedAt == nil)
         _endedAt = State(initialValue: draft.endedAt ?? .now)
+        _stashAdding = State(initialValue: draft.amountML >= 0)
+        let solid = SolidMetadata.decode(draft.label)
+        _solidFood = State(initialValue: solid.food)
+        _solidAllergens = State(initialValue: Set(solid.allergens))
     }
 
     var body: some View {
@@ -443,6 +452,26 @@ struct EntryEditor: View {
                         }
                         .pickerStyle(.segmented)
                     }
+                case .stash:
+                    Section("Milk stash") {
+                        Picker("Action", selection: $stashAdding) {
+                            Text("Add").tag(true)
+                            Text("Use").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        Stepper(value: $amountDisplay, in: 0...unit.maximum * 5, step: unit.step) {
+                            Text("\(VolumeUnit.trim(amountDisplay)) \(unit.symbol)").font(.mina(.body, weight: .semibold))
+                        }
+                    }
+                case .solid:
+                    Section("Food") { TextField("Food", text: $solidFood) }
+                    Section("Common allergens") {
+                        ForEach(Self.commonAllergens, id: \.self) { allergen in
+                            Toggle(allergen, isOn: Binding(get: { solidAllergens.contains(allergen) }, set: { on in
+                                if on { solidAllergens.insert(allergen) } else { solidAllergens.remove(allergen) }
+                            }))
+                        }
+                    }
                 case .tummyTime:
                     Section("Tummy time") { Stepper("\(minutes) min", value: $minutes, in: 1...60) }
                 case .medicine:
@@ -458,6 +487,8 @@ struct EntryEditor: View {
                     }
                 case .milestone:
                     Section("Milestone") { TextField("What she did", text: $draft.label) }
+                case .vaccine, .checkup:
+                    Section(draft.kind.title) { TextField("Name", text: $draft.label) }
                 case .note, .bath:
                     EmptyView()
                 }
@@ -495,9 +526,11 @@ struct EntryEditor: View {
         var final = draft
         switch draft.kind {
         case .bottle, .pumping: final.amountML = unit.milliliters(fromDisplay: amountDisplay)
+        case .stash: final.amountML = unit.milliliters(fromDisplay: amountDisplay) * (stashAdding ? 1 : -1)
+        case .solid: final.label = SolidMetadata.encode(food: solidFood, allergens: Array(solidAllergens))
         case .nursing, .tummyTime: final.endedAt = draft.startedAt.addingTimeInterval(Double(minutes) * 60)
         case .sleep: final.endedAt = ongoing ? nil : max(endedAt, draft.startedAt)
-        case .diaper, .note, .growth, .medicine, .bath, .temperature, .milestone: break
+        case .diaper, .note, .growth, .medicine, .bath, .temperature, .milestone, .vaccine, .checkup: break
         }
         Logbook.shared.apply(final, to: entry)
         do {

@@ -74,6 +74,12 @@ enum Guidance {
         "Take turns sleeping. A rested parent is part of her care too.",
     ]
 
+    static let solids: [String] = [
+        "Around 6 months, start when she can sit with support, control her head and bring food to her mouth; keep breast milk or formula as the main nutrition.",
+        "Offer one food at a time at first. Mina can tag the nine common allergens so you can tell the clinician exactly what she tried and when.",
+        "Use soft textures and upright, supervised feeding. Ask her clinician about allergen timing, especially with severe eczema or an existing food allergy.",
+    ]
+
     static let stages: [GuideStage] = [
         GuideStage(
             id: "days-1-3", title: "Days 1–3", ageDays: 0...2,

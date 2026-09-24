@@ -51,9 +51,10 @@ public final class LogEntry: NSManagedObject {
 
 // MARK: Entry kinds
 
-enum EntryKind: String, CaseIterable, Identifiable {
+enum EntryKind: String, CaseIterable, Identifiable, Sendable {
     case bottle, nursing, diaper, sleep, note
     case pumping, growth, medicine, tummyTime, bath, temperature, milestone
+    case stash, solid, vaccine, checkup
 
     var id: String { rawValue }
     var title: String {
@@ -70,6 +71,10 @@ enum EntryKind: String, CaseIterable, Identifiable {
         case .bath: return "Bath"
         case .temperature: return "Temperature"
         case .milestone: return "Milestone"
+        case .stash: return "Milk stash"
+        case .solid: return "Solid food"
+        case .vaccine: return "Vaccine"
+        case .checkup: return "Checkup"
         }
     }
     var symbol: String {
@@ -86,6 +91,10 @@ enum EntryKind: String, CaseIterable, Identifiable {
         case .bath: return "bathtub.fill"
         case .temperature: return "thermometer.medium"
         case .milestone: return "star.fill"
+        case .stash: return "snowflake"
+        case .solid: return "fork.knife"
+        case .vaccine: return "syringe.fill"
+        case .checkup: return "stethoscope"
         }
     }
     var color: Color {
@@ -102,13 +111,35 @@ enum EntryKind: String, CaseIterable, Identifiable {
         case .bath: return MinaTheme.sleep
         case .temperature: return MinaTheme.danger
         case .milestone: return MinaTheme.warning
+        case .stash: return MinaTheme.bottle
+        case .solid: return MinaTheme.diaperDirty
+        case .vaccine, .checkup: return MinaTheme.note
         }
     }
     var isFeed: Bool { self == .bottle || self == .nursing }
     /// Kinds with a start and an end.
     var isTimed: Bool { self == .sleep || self == .nursing || self == .tummyTime }
     /// The "More" menu on Today, in order.
-    static let extras: [EntryKind] = [.pumping, .growth, .medicine, .tummyTime, .bath, .temperature]
+    static let extras: [EntryKind] = [.pumping, .stash, .solid, .growth, .medicine, .tummyTime, .bath, .temperature]
+}
+
+/// Keeps a solid-food name and its common-allergen tags in the existing
+/// `label` column, avoiding a CloudKit schema migration for this feature.
+enum SolidMetadata {
+    private static let separator = "\u{1F}"
+
+    static func encode(food: String, allergens: [String]) -> String {
+        let cleanFood = food.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAllergens = allergens.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.sorted()
+        return cleanFood + separator + cleanAllergens.joined(separator: ",")
+    }
+
+    static func decode(_ label: String?) -> (food: String, allergens: [String]) {
+        let parts = (label ?? "").components(separatedBy: separator)
+        let food = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let allergens = parts.dropFirst().joined(separator: separator).split(separator: ",").map(String.init).filter { !$0.isEmpty }
+        return (food, allergens)
+    }
 }
 
 // Sendable is spelled out here, not inferred: `AppEnum` in Intents.swift
@@ -348,12 +379,28 @@ extension LogEntry {
         case .milestone:
             let text = (label ?? "").trimmingCharacters(in: .whitespaces)
             return text.isEmpty ? "Milestone" : "★ \(text)"
+        case .stash:
+            let action = amountML < 0 ? "Used from stash" : "Added to stash"
+            return amountML == 0 ? "Milk stash adjustment" : "\(action) · \(unit.format(ml: abs(amountML)))"
+        case .solid:
+            let solid = SolidMetadata.decode(label)
+            return solid.food.isEmpty ? "Solid food" : solid.food
+        case .vaccine:
+            let text = (label ?? "").trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? "Vaccine" : text
+        case .checkup:
+            let text = (label ?? "").trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? "Checkup" : text
         }
     }
 
     /// The second line under a row: the note, or who logged it.
     var subtitle: String? {
         if kind == .nursing, !isOngoingNursing, let label, !label.isEmpty, !label.contains(":") { return label }
+        if kind == .solid {
+            let allergens = SolidMetadata.decode(label).allergens
+            if !allergens.isEmpty { return "Allergens: " + allergens.joined(separator: ", ") }
+        }
         if kind != .note, let note, !note.trimmingCharacters(in: .whitespaces).isEmpty { return note }
         if let loggedBy, !loggedBy.isEmpty { return "by \(loggedBy)" }
         if isFromPartner { return "by your partner" }

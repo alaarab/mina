@@ -200,12 +200,21 @@ struct TrendsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Growth").font(.mina(.headline))
                     ForEach(growth) { entry in
-                        HStack {
-                            Text(entry.title(unit: unit)).font(.mina(.subheadline))
-                            Spacer()
-                            Text((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .omitted)).font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(entry.title(unit: unit)).font(.mina(.subheadline))
+                                Spacer()
+                                Text((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .omitted)).font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+                            }
+                            let percentiles = GrowthStandards.results(for: entry, birthDate: baby.birthDate)
+                            if !percentiles.isEmpty {
+                                Text(percentiles.map(\.label).joined(separator: " · "))
+                                    .font(.mina(.caption)).foregroundStyle(MinaTheme.accent)
+                            }
                         }
                     }
+                    Text("WHO girls' standards; percentiles are a screening reference, not a diagnosis.")
+                        .font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
                 }
                 .minaCard()
             }
@@ -219,7 +228,7 @@ struct TrendsView: View {
 enum Report {
     @MainActor
     static func render(baby: Baby, stats: [DayStat], entries: [LogEntry], unit: VolumeUnit) async -> URL? {
-        let view = ReportPage(babyName: baby.displayName, age: baby.ageDescription(), stats: stats, entries: entries, unit: unit)
+        let view = ReportPage(babyName: baby.displayName, birthDate: baby.birthDate, age: baby.ageDescription(), stats: stats, entries: entries, unit: unit)
             .frame(width: 612)
         let renderer = ImageRenderer(content: view)
         renderer.proposedSize = .init(width: 612, height: nil)
@@ -240,6 +249,7 @@ enum Report {
 
 private struct ReportPage: View {
     let babyName: String
+    let birthDate: Date?
     let age: String
     let stats: [DayStat]
     let entries: [LogEntry]
@@ -273,8 +283,10 @@ private struct ReportPage: View {
             if !growth.isEmpty {
                 Text("Growth").font(.system(size: 14, weight: .semibold))
                 ForEach(growth) { entry in
-                    Text("\((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .omitted)): \(entry.title(unit: unit))").font(.system(size: 11))
+                    let percentile = GrowthStandards.results(for: entry, birthDate: birthDate).map(\.label).joined(separator: " · ")
+                    Text("\((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .omitted)): \(entry.title(unit: unit))\(percentile.isEmpty ? "" : " · \(percentile)")").font(.system(size: 11))
                 }
+                Text("Percentiles use WHO girls' standards and are not a diagnosis.").font(.system(size: 9)).foregroundStyle(.secondary)
             }
             let medicine = entries.filter { $0.kind == .medicine || $0.kind == .temperature }
             if !medicine.isEmpty {

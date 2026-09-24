@@ -458,6 +458,7 @@ private struct TodayContent: View {
                 } label: {
                     QuickButtonLabel(title: "Diaper", subtitle: "Wet or dirty", symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper)
                 }
+                .accessibilityIdentifier("quick-log-diaper")
                 if let sleeping = day.sleeping, let since = sleeping.startedAt {
                     QuickButton(title: "Woke up", subtitle: "Asleep \(Format.duration(now.timeIntervalSince(since)))", symbol: "sun.max.fill", color: MinaTheme.sleep) {
                         endSleep(sleeping)
@@ -475,13 +476,13 @@ private struct TodayContent: View {
                 }
             }
             Menu {
-                ForEach(EntryKind.extras.filter { $0 != .pumping }) { kind in
+                ForEach(EntryKind.extras.filter { $0 != .pumping && ($0 != .solid || (baby.ageDays(on: now) ?? 0) >= 183) }) { kind in
                     Button(kind.title, systemImage: kind.symbol) {
                         if kind == .bath { log(EntryDraft(kind: .bath, startedAt: now)) } else { sheet = .extra(kind) }
                     }
                 }
             } label: {
-                Label("Growth, medicine, tummy time, bath, temperature", systemImage: "plus.circle").pillLabel()
+                Label("Milk stash, growth, medicine and more", systemImage: "plus.circle").pillLabel()
             }
         }
     }
@@ -521,7 +522,9 @@ private struct TodayContent: View {
 
     private func pumpSubtitle(_ summary: DaySummary) -> String {
         let pumped = summary.pumpedML
-        return pumped > 0 ? "\(unit.format(ml: pumped)) today" : "Amount and side"
+        let stash = Logbook.shared.stashBalance(for: baby, in: context)
+        if pumped > 0 { return "\(unit.format(ml: pumped)) today · \(unit.format(ml: stash)) stashed" }
+        return stash != 0 ? "\(unit.format(ml: stash)) stashed" : "Amount and side"
     }
 
     private func feedDetail(_ summary: DaySummary) -> String {
@@ -612,12 +615,9 @@ private struct TodayContent: View {
     }
 
     private func endSleep(_ entry: LogEntry) {
-        entry.endedAt = max(now, entry.startedAt ?? now)
         do {
-            try context.save()
+            _ = try Logbook.shared.endSleep(for: baby, at: now, in: context)
             haptic.play(.tap)
-            // The widgets and Control Center show "asleep"; tell them she's up.
-            Logbook.widgetsChanged()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -734,6 +734,7 @@ struct QuickButton: View {
             QuickButtonLabel(title: title, subtitle: subtitle, symbol: symbol, color: color)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("quick-log-" + title.lowercased().replacingOccurrences(of: " ", with: "-"))
     }
 }
 

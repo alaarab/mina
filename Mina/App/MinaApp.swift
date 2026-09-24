@@ -21,8 +21,12 @@ struct MinaApp: App {
         MinaShortcuts.updateAppShortcutParameters()
         DebugLaunch.seedIfRequested(logbook: .shared, context: persistence.container.viewContext)
         PartnerAlerts.shared.start()
+        WatchBridge.shared.start()
         EntryIndex.refresh()
-        Logbook.anyEntryLogged = { baby, context in WeeklyDigest.schedule(for: baby, in: context) }
+        Logbook.anyEntryLogged = { baby, context in
+            WeeklyDigest.schedule(for: baby, in: context)
+            Task { @MainActor in WatchBridge.shared.refresh(in: context) }
+        }
         Logbook.feedLogged = { baby, context in
             let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
             let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
@@ -31,6 +35,9 @@ struct MinaApp: App {
             } else {
                 FeedAlarm.cancel()
             }
+        }
+        Logbook.timerChanged = { snapshot, ended in
+            Task { @MainActor in await CareTimerActivities.handle(snapshot, ended: ended) }
         }
         Self.startRecoveryExportIfNeeded(persistence: persistence)
     }
@@ -66,6 +73,7 @@ struct MinaApp: App {
                 .environment(\.managedObjectContext, persistence.container.viewContext)
                 .environmentObject(sync)
                 .tint(MinaTheme.accent)
+                .minaNightAppearance()
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -121,7 +129,10 @@ struct RootView: View {
         Group {
             if let baby = persistence.preferredBaby(from: Array(babies)) {
                 MainTabs(baby: baby).id(baby.objectID)
+                    .task { WatchBridge.shared.refresh(for: baby, in: context) }
                     .task { WeeklyDigest.schedule(for: baby, in: context) }
+                    .task { CareSchedule.scheduleReminders(for: baby, in: context) }
+                    .task { await CareTimerActivities.reconcile(for: baby, in: context) }
                     .task { PartnerAlerts.shared.removeCloudSubscriptionIfPresent() }
             } else {
                 OnboardingView()
