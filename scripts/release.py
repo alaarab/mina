@@ -32,7 +32,7 @@ parser.add_argument("--config", type=Path, default=Path("~/.config/ios-release.j
 parser.add_argument("--export-only", action="store_true", help="Make the IPA but don't upload")
 parser.add_argument("--schema-deployed", action="store_true", help="Confirm CloudKit Production schema was deployed and verified before this upload")
 parser.add_argument("--skip-tests", action="store_true")
-parser.add_argument("--test-destination", default="platform=iOS Simulator,name=iPhone 17 Pro", help="xcodebuild destination for unit tests")
+parser.add_argument("--test-destination", default="platform=iOS Simulator,name=iPhone 18 Pro", help="xcodebuild destination for unit tests")
 parser.add_argument("--extra", action="append", default=[], help="Extra xcodebuild argument (repeatable)")
 args = parser.parse_args()
 

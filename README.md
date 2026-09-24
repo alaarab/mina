@@ -29,7 +29,7 @@ xcodebuild -project Mina.xcodeproj -scheme Mina -destination 'generic/platform=i
 
 `~/Projects/deploy-ios-apps.sh Mina` builds and installs it alongside the other apps.
 
-Tests: `xcodebuild -project Mina.xcodeproj -scheme Mina -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`.
+Tests: `xcodebuild -project Mina.xcodeproj -scheme Mina -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test`.
 
 ## First run on two phones
 
