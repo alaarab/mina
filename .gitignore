@@ -15,3 +15,5 @@ Local.xcconfig
 .DS_Store
 .claude/
 Mina/Resources/CHANGELOG.md
+video/*/raw/
+video/*/final/
