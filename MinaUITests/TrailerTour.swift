@@ -7,7 +7,7 @@ final class TrailerTour: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
-        continueAfterFailure = true
+        continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["-seed-demo", "-seed-days", "20", "-tab", "today"]
         app.launch()
@@ -25,25 +25,33 @@ final class TrailerTour: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", prefix)).firstMatch
     }
 
+    private func quick(_ name: String) {
+        let element = app.buttons["quick-log-" + name]
+        for _ in 0..<6 {
+            if element.exists && element.isHittable { break }
+            app.swipeUp()
+        }
+        tap(element)
+    }
+
     func testTour() throws {
         beat(2.5)
 
         // Bottle: quick pick 4, save.
-        tap(button("Bottle")); beat(1.2)
+        quick("bottle"); beat(1.2)
         tap(app.buttons["4"].firstMatch.exists ? app.buttons["4"].firstMatch : button("4")); beat(0.8)
         tap(button("Save bottle")); beat(1.8)
 
         // Diaper: wet.
-        tap(button("Diaper")); beat(0.9)
+        quick("diaper"); beat(0.9)
         tap(app.buttons["Wet"].firstMatch.exists ? app.buttons["Wet"].firstMatch : button("Wet")); beat(1.8)
 
         // Nursing timer: start on the suggested side, let it run, switch, stop.
-        tap(button("Nurse")); beat(1.4)
-        let left = button("Left"), right = button("Right")
+        quick("nurse"); beat(1.4)
+        let left = button("Start on the left"), right = button("Start on the right")
         if left.waitForExistence(timeout: 3) { left.tap() } else { tap(right) }
         beat(2.4)
-        if button("Switch side").exists { button("Switch side").tap(); beat(1.6) }
-        tap(button("Done")); beat(1.8)
+        quick("done-nursing"); beat(1.8)
 
         // Scroll the timeline a little, then come back up.
         app.swipeUp(); beat(1.4); app.swipeDown(); beat(1.0)
