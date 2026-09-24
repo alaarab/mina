@@ -37,6 +37,45 @@ final class UnitTests: XCTestCase {
             XCTAssertNotNil(FeedAmount.caseDisplayRepresentations[amount], "\(amount.rawValue) has no spoken form")
         }
     }
+
+    func testSolidMetadataRoundTripsAndSortsAllergens() {
+        let encoded = SolidMetadata.encode(food: "  Oatmeal  ", allergens: ["Wheat", "", "Milk"])
+        let decoded = SolidMetadata.decode(encoded)
+        XCTAssertEqual(decoded.food, "Oatmeal")
+        XCTAssertEqual(decoded.allergens, ["Milk", "Wheat"])
+    }
+
+    func testWHOStandardsReturnThePublishedMedian() {
+        XCTAssertEqual(try XCTUnwrap(GrowthStandards.percentile(value: 3.2322, ageMonths: 0, kind: .weight)), 50, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(GrowthStandards.percentile(value: 49.148, ageMonths: 0, kind: .length)), 50, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(GrowthStandards.percentile(value: 33.879, ageMonths: 0, kind: .head)), 50, accuracy: 0.01)
+        XCTAssertNil(GrowthStandards.percentile(value: 90, ageMonths: 25, kind: .length), "WHO recumbent-length table ends at 24 months")
+        XCTAssertEqual(GrowthStandards.ordinal(12), "12th")
+        XCTAssertEqual(GrowthStandards.ordinal(23), "23rd")
+    }
+
+    func testNightModeWrapsMidnight() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 9, day: 20))!
+        let at = { hour in calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date)! }
+        XCTAssertTrue(NightMode.isActive(at: at(22), calendar: calendar, enabled: true))
+        XCTAssertTrue(NightMode.isActive(at: at(3), calendar: calendar, enabled: true))
+        XCTAssertFalse(NightMode.isActive(at: at(6), calendar: calendar, enabled: true))
+        XCTAssertFalse(NightMode.isActive(at: at(3), calendar: calendar, enabled: false))
+    }
+
+    func testCareScheduleUsesCalendarDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let birth = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 31)))
+        let oneMonth = try XCTUnwrap(CareSchedule.items.first { $0.id == "checkup-1m" })
+        let threeDays = try XCTUnwrap(CareSchedule.items.first { $0.id == "checkup-3d" })
+        XCTAssertEqual(calendar.dateComponents([.year, .month, .day], from: oneMonth.due(from: birth, calendar: calendar)),
+                       DateComponents(year: 2026, month: 2, day: 28))
+        XCTAssertEqual(calendar.dateComponents([.year, .month, .day], from: threeDays.due(from: birth, calendar: calendar)),
+                       DateComponents(year: 2026, month: 2, day: 3))
+    }
 }
 
 final class GuidanceTests: XCTestCase {
@@ -158,6 +197,31 @@ final class LogbookTests: XCTestCase {
         XCTAssertEqual(entries.count, 1)
         try logbook.delete(entries[0], in: context)
         XCTAssertEqual(logbook.entries(for: baby, from: .distantPast, in: context).count, 0)
+    }
+
+    func testStashBalanceCountsPumpsAndAdjustments() throws {
+        try add(.pumping, at: 100) { $0.amountML = 120 }
+        try add(.stash, at: 200) { $0.amountML = 60 }
+        try add(.stash, at: 300) { $0.amountML = -45 }
+        try add(.bottle, at: 400) { $0.amountML = 90 }
+        XCTAssertEqual(logbook.stashBalance(for: baby, in: context), 135)
+    }
+
+    func testUndoOnlyRemovesThisPhonesFreshestEntry() throws {
+        try add(.note, at: 100) { $0.note = "mine" }
+        let mine = try XCTUnwrap(logbook.entries(for: baby, from: .distantPast, in: context).first)
+        mine.createdAt = day.addingTimeInterval(100)
+
+        try add(.note, at: 200) { $0.note = "partner" }
+        let partner = try XCTUnwrap(logbook.entries(for: baby, from: .distantPast, in: context).first { $0.note == "partner" })
+        partner.createdAt = day.addingTimeInterval(200)
+        partner.deviceID = "other-phone"
+        try context.save()
+
+        let undone = try XCTUnwrap(logbook.undoLastEntry(for: baby, now: day.addingTimeInterval(300), in: context))
+        XCTAssertEqual(undone.title, "mine")
+        XCTAssertEqual(logbook.entries(for: baby, from: .distantPast, in: context).map(\.note), ["partner"])
+        XCTAssertNil(try logbook.undoLastEntry(for: baby, now: day.addingTimeInterval(2_000), in: context))
     }
 }
 
@@ -592,6 +656,24 @@ final class BackupTests: XCTestCase {
         let entries = Logbook(persistence: other).entries(for: target, from: .distantPast, in: other.container.viewContext)
         XCTAssertEqual(entries.count, 2)
         XCTAssertEqual(entries.first { $0.kind == .growth }?.weightGrams, 3400)
+    }
+
+    func testCSVQuotesTextAndLeavesPhotosOut() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let logbook = Logbook(persistence: persistence)
+        let context = persistence.container.viewContext
+        let baby = try logbook.createBaby(name: "Test, Baby", birthDate: .now, in: context)
+        var note = EntryDraft(kind: .note)
+        note.note = "line one, \"quoted\"\nline two"
+        note.photo = EntryPhoto(full: Data([0, 1, 2, 3]), thumb: Data([4, 5]))
+        try logbook.add(note, to: baby, in: context)
+
+        let csv = try XCTUnwrap(String(data: Backup.csvData(baby: baby, in: context), encoding: .utf8))
+        XCTAssertTrue(csv.hasPrefix("baby,birth_date,id,kind"))
+        XCTAssertTrue(csv.contains("\"Test, Baby\""))
+        XCTAssertTrue(csv.contains("\"line one, \"\"quoted\"\"\nline two\""))
+        XCTAssertTrue(csv.contains(",true\r\n"))
+        XCTAssertFalse(csv.contains("AAECAw=="), "binary photos belong only in JSON backups")
     }
 }
 

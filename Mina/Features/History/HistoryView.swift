@@ -25,10 +25,10 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
     var kinds: [EntryKind]? {
         switch self {
         case .all: return nil
-        case .feeds: return [.bottle, .nursing, .pumping]
+        case .feeds: return [.bottle, .nursing, .pumping, .stash, .solid]
         case .diapers: return [.diaper]
         case .sleep: return [.sleep, .tummyTime, .bath]
-        case .health: return [.growth, .medicine, .temperature]
+        case .health: return [.growth, .medicine, .temperature, .vaccine, .checkup]
         case .notes: return [.note, .milestone]
         }
     }

@@ -67,7 +67,7 @@ struct DaySummary {
                 pumpedML += entry.amountML
             // The rest are logged and shown as rows, but nothing on any screen
             // counts them, so a day's totals don't carry them.
-            case .tummyTime, .growth, .medicine, .bath, .temperature, .milestone:
+            case .tummyTime, .growth, .medicine, .bath, .temperature, .milestone, .stash, .solid, .vaccine, .checkup:
                 continue
             }
         }

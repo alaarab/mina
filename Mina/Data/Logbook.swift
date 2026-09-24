@@ -54,6 +54,7 @@ struct EntryDraft {
 
 /// A value copy of an entry, safe to carry out of a Core Data context.
 struct EntrySnapshot {
+    let id: UUID?
     let kind: EntryKind
     let startedAt: Date
     let endedAt: Date?
@@ -61,8 +62,10 @@ struct EntrySnapshot {
     let side: NursingSide?
     let diaper: DiaperKind?
     let babyName: String
+    let title: String
 
     init(entry: LogEntry) {
+        id = entry.id
         kind = entry.kind
         startedAt = entry.startedAt ?? .now
         endedAt = entry.endedAt
@@ -70,6 +73,32 @@ struct EntrySnapshot {
         side = entry.side
         diaper = entry.diaper
         babyName = entry.baby?.displayName ?? "Baby"
+        title = entry.title(unit: Prefs.unit)
+    }
+}
+
+/// The small, sendable value the app uses to keep a running timer mirrored in
+/// a Live Activity without carrying a managed object across actors.
+struct TimerSnapshot: Sendable {
+    let id: UUID
+    let kind: EntryKind
+    let babyName: String
+    let startedAt: Date
+    let detail: String
+
+    init?(_ entry: LogEntry) {
+        guard let id = entry.id, let startedAt = entry.startedAt,
+              entry.kind == .sleep || entry.kind == .nursing else { return nil }
+        self.id = id
+        kind = entry.kind
+        babyName = entry.baby?.displayName ?? "Baby"
+        self.startedAt = startedAt
+        if entry.kind == .nursing {
+            let segment = (entry.label ?? "").split(separator: "|").last?.split(separator: ":").first.map(String.init)
+            detail = segment.flatMap(NursingSide.init(rawValue:))?.title ?? entry.side?.title ?? "Nursing"
+        } else {
+            detail = "Sleeping"
+        }
     }
 }
 
@@ -143,6 +172,7 @@ final class Logbook: @unchecked Sendable {
         try context.save()
         if draft.kind == .nursing, draft.endedAt != nil, let side = draft.side, side != .both { Prefs.lastNursingSide = side }
         didChangeEntries(for: baby, in: context, feedChanged: draft.kind.isFeed)
+        if draft.endedAt == nil, let timer = TimerSnapshot(entry) { Self.timerChanged?(timer, false) }
         return entry
     }
 
@@ -182,9 +212,14 @@ final class Logbook: @unchecked Sendable {
     }
 
     func delete(_ entry: LogEntry, in context: NSManagedObjectContext) throws {
+        let baby = entry.baby
+        let kind = entry.kind
+        let timer = entry.endedAt == nil ? TimerSnapshot(entry) : nil
         context.delete(entry)
         try context.save()
-        Self.widgetsChanged()
+        if let baby { didChangeEntries(for: baby, in: context, feedChanged: kind.isFeed) }
+        else { Self.widgetsChanged() }
+        if let timer { Self.timerChanged?(timer, true) }
     }
 
     /// Widgets show the last feed and today's counts; tell them when those move.
@@ -227,9 +262,11 @@ final class Logbook: @unchecked Sendable {
     @discardableResult
     func endSleep(for baby: Baby, at date: Date = .now, in context: NSManagedObjectContext) throws -> LogEntry? {
         guard let sleep = ongoingSleep(for: baby, in: context) else { return nil }
+        let timer = TimerSnapshot(sleep)
         sleep.endedAt = max(date, sleep.startedAt ?? date)
         try context.save()
         Self.widgetsChanged()
+        if let timer { Self.timerChanged?(timer, true) }
         return sleep
     }
 
@@ -259,11 +296,13 @@ final class Logbook: @unchecked Sendable {
         entry.label = (entry.label ?? "") + "|\(next.rawValue):\(Int(date.timeIntervalSince1970))"
         entry.side = .both
         try context.save()
+        if let timer = TimerSnapshot(entry) { Self.timerChanged?(timer, false) }
     }
 
     @discardableResult
     func endNursing(_ entry: LogEntry, at date: Date = .now, in context: NSManagedObjectContext) throws -> LogEntry {
         guard entry.isOngoingNursing else { return entry }
+        let timer = TimerSnapshot(entry)
         entry.endedAt = max(date, entry.startedAt ?? date)
         // Turn the raw side log into "left 8m · right 6m" and remember the last side.
         let segments = (entry.label ?? "").split(separator: "|").compactMap { part -> (NursingSide, Date)? in
@@ -285,6 +324,7 @@ final class Logbook: @unchecked Sendable {
         }
         try context.save()
         Self.widgetsChanged()
+        if let timer { Self.timerChanged?(timer, true) }
         return entry
     }
 
@@ -317,6 +357,13 @@ final class Logbook: @unchecked Sendable {
         return try? context.fetch(request).first
     }
 
+    func labelled(_ label: String, kind: EntryKind, for baby: Baby, in context: NSManagedObjectContext) -> LogEntry? {
+        let request = LogEntry.request()
+        request.predicate = NSPredicate(format: "baby == %@ AND kindRaw == %@ AND label == %@", baby, kind.rawValue, label)
+        request.fetchLimit = 1
+        return try? context.fetch(request).first
+    }
+
     /// Tick or untick a milestone from the guide.
     func toggleMilestone(_ label: String, for baby: Baby, in context: NSManagedObjectContext) throws {
         if let existing = milestone(labelled: label, for: baby, in: context) {
@@ -326,6 +373,44 @@ final class Logbook: @unchecked Sendable {
             draft.label = label
             try add(draft, to: baby, in: context)
         }
+    }
+
+    /// Tick or untick a scheduled checkup/vaccine. Completion is logged when
+    /// the parent checks it, while the guide continues to show the due date.
+    func toggleCareItem(kind: EntryKind, label: String, at date: Date = .now, for baby: Baby, in context: NSManagedObjectContext) throws {
+        precondition(kind == .checkup || kind == .vaccine)
+        if let existing = labelled(label, kind: kind, for: baby, in: context) {
+            try delete(existing, in: context)
+        } else {
+            var draft = EntryDraft(kind: kind, startedAt: date)
+            draft.label = label
+            try add(draft, to: baby, in: context)
+        }
+    }
+
+    /// Pumped milk plus explicit stash adjustments. Bottles are not subtracted
+    /// automatically because Mina cannot know whether one contained breast
+    /// milk or formula.
+    func stashBalance(for baby: Baby, in context: NSManagedObjectContext) -> Double {
+        let request = LogEntry.request()
+        request.predicate = NSPredicate(format: "baby == %@ AND kindRaw IN %@", baby, [EntryKind.pumping.rawValue, EntryKind.stash.rawValue])
+        return ((try? context.fetch(request)) ?? []).reduce(0) { total, entry in
+            total + (entry.kind == .pumping ? max(0, entry.amountML) : entry.amountML)
+        }
+    }
+
+    /// Removes only this phone's most recently created entry, and only while
+    /// it is still fresh enough for “undo” to be unambiguous.
+    func undoLastEntry(for baby: Baby, now: Date = .now, maxAge: TimeInterval = 15 * 60,
+                       in context: NSManagedObjectContext) throws -> EntrySnapshot? {
+        let request = LogEntry.request()
+        request.predicate = NSPredicate(format: "baby == %@ AND deviceID == %@ AND createdAt >= %@", baby, Prefs.deviceID, now.addingTimeInterval(-maxAge) as NSDate)
+        request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+        request.fetchLimit = 1
+        guard let entry = try context.fetch(request).first else { return nil }
+        let snapshot = EntrySnapshot(entry: entry)
+        try delete(entry, in: context)
+        return snapshot
     }
 
     /// Start times of the most recent feeds, newest first.
@@ -371,6 +456,9 @@ final class Logbook: @unchecked Sendable {
     static var feedLogged: ((Baby, NSManagedObjectContext) -> Void)?
     /// Installed by the app: refreshes the weekly digest after any entry.
     static var anyEntryLogged: ((Baby, NSManagedObjectContext) -> Void)?
+    /// Installed by the app to mirror nursing/sleep timers on the Lock Screen.
+    /// `ended` distinguishes an update from an activity dismissal.
+    static var timerChanged: ((TimerSnapshot, Bool) -> Void)?
 
     func rearmFeedAlarm(for baby: Baby, in context: NSManagedObjectContext) {
         Self.feedLogged?(baby, context)

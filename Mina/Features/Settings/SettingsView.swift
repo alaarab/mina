@@ -28,6 +28,8 @@ struct SettingsView: View {
     @AppStorage(Reminders.feedKey, store: Prefs.defaults) private var feedReminders = false
     @AppStorage(FeedAlarm.onKey, store: Prefs.defaults) private var feedAlarm = false
     @AppStorage(WeeklyDigest.onKey, store: Prefs.defaults) private var weeklyDigest = true
+    @AppStorage(CareSchedule.remindersKey, store: Prefs.defaults) private var careReminders = false
+    @AppStorage(NightMode.key, store: Prefs.defaults) private var threeAMDimMode = true
     @AppStorage(Quiet.hoursOnKey, store: Prefs.defaults) private var quietHours = false
     @AppStorage(Quiet.hoursStartKey, store: Prefs.defaults) private var quietStart = 22 * 60
     @AppStorage(Quiet.hoursEndKey, store: Prefs.defaults) private var quietEnd = Quiet.morningHour * 60
@@ -36,6 +38,7 @@ struct SettingsView: View {
     @ObservedObject private var nanit = NanitSync.shared
     @State private var linkingNanit = false
     @State private var exportURL: URL?
+    @State private var csvURL: URL?
     @State private var importing = false
     @State private var backupMessage: String?
     @FetchRequest(fetchRequest: Baby.request(), animation: .default) private var babies: FetchedResults<Baby>
@@ -129,6 +132,8 @@ struct SettingsView: View {
                     Toggle("Alert me when my partner logs", isOn: $partnerAlerts)
                     Toggle("Sunday evening digest", isOn: $weeklyDigest)
                         .onChange(of: weeklyDigest) { _, _ in WeeklyDigest.schedule(for: baby, in: context) }
+                    Toggle("Visit & vaccine reminders", isOn: $careReminders)
+                        .onChange(of: careReminders) { _, _ in CareSchedule.scheduleReminders(for: baby, in: context) }
                     Toggle("Remind me when a feed is due", isOn: $feedReminders)
                         .onChange(of: feedReminders) { _, on in
                             if !on { Reminders.scheduleFeed(nil, babyName: baby.displayName) }
@@ -177,10 +182,11 @@ struct SettingsView: View {
                     if let quiet = Quiet.label() {
                         LabeledContent("Right now", value: quiet)
                     }
+                    Toggle("3 AM dim mode", isOn: $threeAMDimMode)
                 } header: {
                     Text("Quiet")
                 } footer: {
-                    Text("During quiet hours this phone gets no feed alarm, feed reminders or partner alerts. The bell on Today pauses them for an hour, three hours, until morning, or until you turn them back on. Each phone has its own quiet setting.")
+                    Text("During quiet hours this phone gets no feed alarm, feed reminders or partner alerts. The 3 AM dim mode uses Mina's dark palette from 10 PM to 6 AM without changing screen brightness. Each phone has its own settings.")
                 }
 
 
@@ -257,6 +263,7 @@ struct SettingsView: View {
                         siriPhrase("\(baby.displayName) woke up")
                         siriPhrase("\(baby.displayName) weighs 7 pounds 4 ounces")
                         siriPhrase("When did \(baby.displayName) last eat?")
+                        siriPhrase("Undo the last entry in Mina")
                     }
                     .padding(.vertical, 4)
                     ShortcutsLink()
@@ -270,9 +277,13 @@ struct SettingsView: View {
 
                 Section {
                     if let exportURL {
-                        ShareLink(item: exportURL, subject: Text("\(baby.displayName)'s log")) { Label("Share the export file", systemImage: "square.and.arrow.up") }
+                        ShareLink(item: exportURL, subject: Text("\(baby.displayName)'s log")) { Label("Share JSON backup", systemImage: "square.and.arrow.up") }
                     }
                     Button { export() } label: { Label("Export everything to a file", systemImage: "arrow.up.doc") }
+                    if let csvURL {
+                        ShareLink(item: csvURL, subject: Text("\(baby.displayName)'s log as CSV")) { Label("Share CSV", systemImage: "tablecells") }
+                    }
+                    Button { exportCSV() } label: { Label("Export spreadsheet (CSV)", systemImage: "tablecells") }
                     Button { importing = true } label: { Label("Import from a file", systemImage: "arrow.down.doc") }
                     if let backupMessage { Text(backupMessage).font(.mina(.footnote)).foregroundStyle(MinaTheme.textSecondary) }
                 } header: {
@@ -326,6 +337,16 @@ struct SettingsView: View {
             exportURL = url
             backupMessage = "Ready to share: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))."
         } catch { backupMessage = "Export failed: \(error.localizedDescription)" }
+    }
+
+    private func exportCSV() {
+        do {
+            let data = try Backup.csvData(baby: baby, in: context)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(baby.displayName)-log.csv")
+            try data.write(to: url, options: .atomic)
+            csvURL = url
+            backupMessage = "CSV ready: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)). Photos remain in the JSON backup."
+        } catch { backupMessage = "CSV export failed: \(error.localizedDescription)" }
     }
 
     private func siriPhrase(_ text: String) -> some View {

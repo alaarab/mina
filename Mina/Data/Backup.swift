@@ -60,6 +60,32 @@ enum Backup {
         return try encoder.encode(try makeFile(baby: baby, in: context))
     }
 
+    /// Spreadsheet-friendly export. Photos stay in the JSON backup; CSV marks
+    /// their presence without turning each image into megabytes of base64.
+    static func csvData(baby: Baby, in context: NSManagedObjectContext) throws -> Data {
+        let file = try makeFile(baby: baby, in: context)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var rows = [["baby", "birth_date", "id", "kind", "started_at", "ended_at", "amount_ml", "side", "diaper", "label", "note", "logged_by", "weight_g", "length_cm", "head_cm", "temperature_c", "has_photo"]]
+        rows += file.entries.map { entry in
+            [file.babyName, file.birthDate.map { formatter.string(from: $0) } ?? "", entry.id.uuidString, entry.kind,
+             formatter.string(from: entry.startedAt), entry.endedAt.map { formatter.string(from: $0) } ?? "", number(entry.amountML),
+             entry.side ?? "", entry.diaper ?? "", entry.label ?? "", entry.note ?? "", entry.loggedBy ?? "",
+             number(entry.weightGrams), number(entry.lengthCM), number(entry.headCM), number(entry.temperatureC), entry.photo == nil ? "false" : "true"]
+        }
+        let text = rows.map { $0.map(csvCell).joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
+        return Data(text.utf8)
+    }
+
+    private static func csvCell(_ value: String) -> String {
+        guard value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") else { return value }
+        return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
+    private static func number(_ value: Double) -> String {
+        value == 0 ? "" : String(format: "%.6f", value).replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
+    }
+
     /// Adds entries whose ids aren't in the log yet. Returns how many were added.
     @discardableResult
     static func importData(_ data: Data, into baby: Baby, in context: NSManagedObjectContext) throws -> Int {

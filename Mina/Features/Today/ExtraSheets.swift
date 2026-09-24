@@ -21,6 +21,11 @@ struct ExtraSheet: View {
     @State private var temperature: Double
     @State private var medicine = "Vitamin D"
     @State private var dose = "400 IU"
+    @State private var stashAdding = true
+    @State private var food = ""
+    @State private var allergens: Set<String> = []
+
+    private static let commonAllergens = ["Milk", "Egg", "Peanut", "Tree nut", "Soy", "Wheat", "Sesame", "Fish", "Shellfish"]
 
     private let bodyUnit = Prefs.bodyUnit
 
@@ -43,6 +48,28 @@ struct ExtraSheet: View {
                         }
                         Picker("Side", selection: $side) { ForEach(NursingSide.allCases) { Text($0.title).tag($0) } }
                             .pickerStyle(.segmented)
+                    }
+                case .stash:
+                    Section("Adjustment") {
+                        Picker("Action", selection: $stashAdding) {
+                            Text("Add").tag(true)
+                            Text("Use").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        Stepper(value: $amount, in: 0...unit.maximum * 5, step: unit.step) {
+                            Text("\(VolumeUnit.trim(amount)) \(unit.symbol)").font(.mina(.title3, weight: .semibold))
+                        }
+                    }
+                case .solid:
+                    Section("Food") {
+                        TextField("Avocado, oatmeal, banana…", text: $food)
+                    }
+                    Section("Common allergens") {
+                        ForEach(Self.commonAllergens, id: \.self) { allergen in
+                            Toggle(allergen, isOn: Binding(get: { allergens.contains(allergen) }, set: { on in
+                                if on { allergens.insert(allergen) } else { allergens.remove(allergen) }
+                            }))
+                        }
                     }
                 case .growth:
                     Section("Weight") {
@@ -88,7 +115,10 @@ struct ExtraSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }.fontWeight(.semibold)
+                        .disabled(kind == .solid && food.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
         }
     }
@@ -103,6 +133,10 @@ struct ExtraSheet: View {
         case .pumping:
             draft.amountML = unit.milliliters(fromDisplay: amount)
             draft.side = side
+        case .stash:
+            draft.amountML = unit.milliliters(fromDisplay: amount) * (stashAdding ? 1 : -1)
+        case .solid:
+            draft.label = SolidMetadata.encode(food: food, allergens: Array(allergens))
         case .growth:
             draft.weightGrams = bodyUnit.isImperial ? (Double(pounds) * 16 + ounces) * Measure.gramsPerOunce : kilograms * 1000
             draft.lengthCM = Measure.cm(fromDisplay: length, unit: bodyUnit)

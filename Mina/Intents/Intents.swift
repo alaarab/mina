@@ -293,6 +293,25 @@ struct FeedStatusIntent: AppIntent {
     }
 }
 
+struct UndoLastEntryIntent: AppIntent {
+    @Parameter(title: "Baby")
+    var baby: BabyEntity?
+
+    static var title: LocalizedStringResource = "Undo the last entry"
+    static var description = IntentDescription("Removes the last entry made from this phone within 15 minutes.")
+    static var openAppWhenRun = false
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let result = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby in
+            try Logbook.shared.undoLastEntry(for: baby, in: context)
+        }
+        guard let result else {
+            return .result(dialog: "There isn't a recent entry from this phone to undo.")
+        }
+        return .result(dialog: "Removed \(result.title) for \(result.babyName).")
+    }
+}
+
 // MARK: Phrases
 
 struct MinaShortcuts: AppShortcutsProvider {
@@ -321,15 +340,6 @@ struct MinaShortcuts: AppShortcutsProvider {
             "\(.applicationName) nursed",
             "Log nursing in \(.applicationName)",
         ], shortTitle: "Log nursing", systemImageName: "heart.fill")
-
-        AppShortcut(intent: LogDiaperIntent(), phrases: [
-            "\(.applicationName) had a \(\.$kind) diaper",
-            "\(.applicationName) has a \(\.$kind) diaper",
-            "Log a \(\.$kind) diaper in \(.applicationName)",
-            "\(.applicationName) had a diaper",
-            "Log a diaper in \(.applicationName)",
-            "Log a diaper for \(\.$baby) in \(.applicationName)",
-        ], shortTitle: "Log a diaper", systemImageName: "drop.fill")
 
         AppShortcut(intent: LogPeeIntent(), phrases: [
             "\(.applicationName) just peed",
@@ -393,5 +403,11 @@ struct MinaShortcuts: AppShortcutsProvider {
             "How was \(.applicationName)'s day \(\.$day)",
             "When did \(\.$baby) last eat in \(.applicationName)",
         ], shortTitle: "Last feed", systemImageName: "clock.fill")
+
+        AppShortcut(intent: UndoLastEntryIntent(), phrases: [
+            "Undo the last entry in \(.applicationName)",
+            "Undo my last log in \(.applicationName)",
+            "Remove the last entry in \(.applicationName)",
+        ], shortTitle: "Undo last entry", systemImageName: "arrow.uturn.backward.circle.fill")
     }
 }

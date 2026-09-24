@@ -267,6 +267,7 @@ struct MinaWidgetBundle: WidgetBundle {
     var body: some Widget {
         MinaQuickLogWidget()
         MinaStatusWidget()
+        CareTimerActivity()
         if #available(iOS 18.0, *) {
             LogBottleControl()
             NursingControl()

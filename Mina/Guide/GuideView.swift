@@ -36,7 +36,23 @@ struct GuideView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     stagePicker
                     headlineCard
+                    NavigationLink { CareScheduleView(baby: baby) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar.badge.clock").foregroundStyle(MinaTheme.note)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Visits & vaccines").font(.mina(.headline)).foregroundStyle(MinaTheme.text)
+                                Text("Dates from her birthday · tap to track").font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(MinaTheme.textMuted)
+                        }
+                        .minaCard()
+                    }
+                    .buttonStyle(.plain)
                     GuideSection(title: "Feeding", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle, items: stage.feeding)
+                    if (baby.ageDays() ?? 0) >= 183 || stage.ageDays.contains(183) {
+                        GuideSection(title: "Starting solids", symbol: EntryKind.solid.symbol, color: EntryKind.solid.color, items: Guidance.solids)
+                    }
                     GuideSection(title: "Diapers", symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper, items: stage.diapers)
                     GuideSection(title: "Sleep", symbol: EntryKind.sleep.symbol, color: MinaTheme.sleep, items: stage.sleep)
                     GuideSection(title: "Growth", symbol: "chart.line.uptrend.xyaxis", color: MinaTheme.accent, items: stage.growth)

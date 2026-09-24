@@ -9,6 +9,7 @@ Mina/Resources/Info.plist
 Mina/Resources/Mina.entitlements
 MinaWidgets/Info.plist
 MinaWidgets/MinaWidgets.entitlements
+MinaWatch/Info.plist
 
 Local.xcconfig
 .DS_Store
