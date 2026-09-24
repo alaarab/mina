@@ -30,7 +30,9 @@ parser.add_argument("--build-number", type=int, help="Override the auto-incremen
 parser.add_argument("--marketing-version", help="Override CFBundleShortVersionString for this build")
 parser.add_argument("--config", type=Path, default=Path("~/.config/ios-release.json").expanduser())
 parser.add_argument("--export-only", action="store_true", help="Make the IPA but don't upload")
+parser.add_argument("--schema-deployed", action="store_true", help="Confirm CloudKit Production schema was deployed and verified before this upload")
 parser.add_argument("--skip-tests", action="store_true")
+parser.add_argument("--test-destination", default="platform=iOS Simulator,name=iPhone 17 Pro", help="xcodebuild destination for unit tests")
 parser.add_argument("--extra", action="append", default=[], help="Extra xcodebuild argument (repeatable)")
 args = parser.parse_args()
 
@@ -69,15 +71,18 @@ def run(command, **kwargs):
 
 
 model = root / "Mina/Data/MinaModel.swift"
+model_stamp = None
+digest = None
 if model.exists():
-    stamp = Path("~/.config/ios-release").expanduser() / f"{scheme}.model.sha"
+    if not args.export_only and not args.schema_deployed:
+        sys.exit("CloudKit Production schema must be deployed and verified before upload. "
+                 "Use --export-only to prepare the IPA, or --schema-deployed after verification.")
+    model_stamp = Path("~/.config/ios-release").expanduser() / f"{scheme}.model.sha"
     import hashlib
     digest = hashlib.sha256(model.read_bytes()).hexdigest()
-    if stamp.exists() and stamp.read_text().strip() != digest:
+    if model_stamp.exists() and model_stamp.read_text().strip() != digest:
         print("\n!! The Core Data model changed since the last upload. Before testers sync, run the schema helper and\n"
               "!! deploy Development -> Production in the CloudKit console (see docs/TESTFLIGHT.md).\n", flush=True)
-    stamp.parent.mkdir(parents=True, exist_ok=True)
-    stamp.write_text(digest)
 
 run(["xcodegen", "generate"])
 project = f"{scheme}.xcodeproj"
@@ -86,7 +91,7 @@ settings = [f"CURRENT_PROJECT_VERSION={build_number}"] + ([f"MARKETING_VERSION={
             f"DEVELOPMENT_TEAM={config['team']}", "CODE_SIGN_STYLE=Automatic"]
 
 if not args.skip_tests:
-    run(["xcodebuild", "-project", project, "-scheme", scheme, "-destination", "platform=iOS Simulator,name=iPhone 17 Pro",
+    run(["xcodebuild", "-project", project, "-scheme", scheme, "-destination", args.test_destination,
          "-derivedDataPath", "./.dd", "-quiet", "test"] + args.extra)
 
 stamp = datetime.now().strftime("%Y%m%d-%H%M")
@@ -112,6 +117,10 @@ run(["xcodebuild", "-exportArchive", "-archivePath", str(archive), "-exportPath"
      "-exportOptionsPlist", str(options), "-allowProvisioningUpdates",
      "-authenticationKeyPath", str(key_path), "-authenticationKeyID", config["key_id"], "-authenticationKeyIssuerID", config["issuer_id"]])
 
-counter.write_text(str(build_number))
+if not args.export_only:
+    counter.write_text(str(build_number))
+    if model_stamp is not None and digest is not None:
+        model_stamp.parent.mkdir(parents=True, exist_ok=True)
+        model_stamp.write_text(digest)
 where = f"exported to {output / 'export'}" if args.export_only else "uploaded; it appears in TestFlight once App Store Connect finishes processing (10–30 min)"
 print(f"\n{scheme} build {build_number} {where}.")

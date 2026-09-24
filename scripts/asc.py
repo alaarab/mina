@@ -19,7 +19,7 @@ def call(method, path, body=None, raw=False):
         data = resp.read()
         return json.loads(data) if data and not raw else (data if raw else {})
     except urllib.error.HTTPError as e:
-        detail = e.read().decode()[:500]
+        detail = e.read().decode()[:8000]
         raise SystemExit(f"{method} {path}: HTTP {e.code} {detail}")
 
 def upload(path: pathlib.Path, create_path: str, relationships: dict, extra_attrs=None):
