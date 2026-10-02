@@ -1,6 +1,6 @@
 import Foundation
 
-/// WHO Child Growth Standards for girls, birth to five years. Mina's language
+/// WHO Child Growth Standards for girls, birth through 24 months in this table. Mina's language
 /// and current audience are girl-specific; the UI names that standard plainly.
 /// LMS source workbooks:
 /// https://www.who.int/tools/child-growth-standards/standards/weight-for-age
@@ -28,8 +28,9 @@ enum GrowthStandards {
 
     static func results(for entry: LogEntry, birthDate: Date?, calendar: Calendar = .current) -> [Result] {
         guard let birthDate, let measuredAt = entry.startedAt else { return [] }
-        let days = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: birthDate), to: calendar.startOfDay(for: measuredAt)).day ?? 0)
-        let months = Double(days) / 30.4375
+        // Calendar anniversaries preserve the exact 24-month boundary,
+        // including birthdays spanning a leap day. Future birthdays have no percentile.
+        guard let months = ChildAge.months(birthDate: birthDate, on: measuredAt, calendar: calendar) else { return [] }
         var output: [Result] = []
         if entry.weightGrams > 0, let p = percentile(value: entry.weightGrams / 1000, ageMonths: months, table: weight) {
             output.append(.init(kind: .weight, percentile: p))

@@ -2,7 +2,7 @@ import Foundation
 
 /// The age-by-age content behind the Guide tab, and the typical ranges the
 /// Today screen quotes as "expect 7–10 a day". Plain data, in the spirit of AAP
-/// guidance, with the stages laid end to end so every day of her first year
+/// guidance, with the stages laid end to end so every day through toddlerhood
 /// falls in exactly one.
 
 // MARK: Values
@@ -10,19 +10,20 @@ import Foundation
 /// Typical ranges for a stage, used both in the guide and as "expect" hints
 /// on the Today screen.
 struct Expectation {
-    let feedsPerDay: ClosedRange<Int>
-    let mlPerFeed: ClosedRange<Double>
-    let wetDiapersPerDay: Int
-    let sleepHours: ClosedRange<Double>
+    var feedsPerDay: ClosedRange<Int>? = nil
+    var mlPerFeed: ClosedRange<Double>? = nil
+    var wetDiapersPerDay: Int? = nil
+    var sleepHours: ClosedRange<Double>? = nil
 
-    func feedsText() -> String { "\(feedsPerDay.lowerBound)–\(feedsPerDay.upperBound) a day" }
+    func feedsText() -> String { feedsPerDay.map { "\($0.lowerBound)–\($0.upperBound) a day" } ?? "Follow her routine" }
     func perFeedText(unit: VolumeUnit) -> String {
+        guard let mlPerFeed else { return "Follow her routine" }
         let low = VolumeUnit.trim(unit.display(ml: mlPerFeed.lowerBound).rounded())
         let high = VolumeUnit.trim(unit.display(ml: mlPerFeed.upperBound).rounded())
         return "\(low)–\(high) \(unit.symbol) each"
     }
-    func wetText() -> String { "\(wetDiapersPerDay)+ wet" }
-    func sleepText() -> String { "\(VolumeUnit.trim(sleepHours.lowerBound))–\(VolumeUnit.trim(sleepHours.upperBound))h" }
+    func wetText() -> String { wetDiapersPerDay.map { "\($0)+ wet" } ?? "Follow her routine" }
+    func sleepText() -> String { sleepHours.map { "\(VolumeUnit.trim($0.lowerBound))–\(VolumeUnit.trim($0.upperBound))h" } ?? "Follow her routine" }
 }
 
 struct GuideStage: Identifiable {
@@ -38,16 +39,53 @@ struct GuideStage: Identifiable {
     let milestones: [String]
     let checkups: [String]
     let watchFor: [String]
+    var startMonth: Int? = nil
 }
 
 // MARK: The content
 
-/// General newborn ranges in the spirit of AAP guidance. Not medical advice;
+/// Newborn ranges and sourced older-infant/toddler guidance. Not medical advice;
 /// the pediatrician who has actually met the baby always wins.
 enum Guidance {
     static func stage(forAgeDays days: Int) -> GuideStage {
         stages.first { $0.ageDays.contains(max(0, days)) } ?? stages[stages.count - 1]
     }
+
+    /// Use calendar anniversaries for all six-month-and-older transitions.
+    /// Day-only callers retain approximate ranges; app surfaces use the birthday.
+    static func stage(birthDate: Date, on date: Date = .now, calendar: Calendar = .current) -> GuideStage {
+        let birth = calendar.startOfDay(for: birthDate)
+        let today = calendar.startOfDay(for: date)
+        for stage in stages.reversed() {
+            if let month = stage.startMonth,
+               let boundary = calendar.date(byAdding: .month, value: month, to: birth), today >= boundary {
+                return stage
+            }
+        }
+        let days = calendar.dateComponents([.day], from: birth, to: today).day ?? 0
+        return stage(forAgeDays: min(182, days))
+    }
+
+    static let sources: [(title: String, url: String)] = [
+        ("CDC: food and feeding routines", "https://www.cdc.gov/infant-toddler-nutrition/foods-and-drinks/how-much-and-how-often-to-feed.html"),
+        ("CDC: developmental checklists", "https://www.cdc.gov/act-early/milestones/index.html"),
+        ("AASM: sleep duration", "https://aasm.org/recharge-with-sleep-pediatric-sleep-recommendations-promoting-optimal-health/"),
+        ("AAP: well-child visits", "https://www.aap.org/periodicityschedule"),
+        ("HealthyChildren: breathing trouble", "https://www.healthychildren.org/English/tips-tools/symptom-checker/IFrame/Pages/symptomviewer.aspx?symptom=Breathing+Trouble"),
+    ]
+
+    static let olderEveryday = [
+        "Use Food to record meals, snacks and allergens; notes can record routines, toilet learning and questions for visits.",
+        "Keep logging naps and nights, growth, medicine and family memories. Earlier entries stay in History.",
+        "Read and play together. Use the CDC checklist for her age and discuss concerns or lost skills with her clinician.",
+    ]
+
+    static let olderWatchFor = ["Discuss feeding, growth or development concerns with her clinician. Report any skills she has lost."]
+
+    static let olderCallTheDoctor = [
+        "Trouble breathing, blue or grey lips, or being very hard to wake needs urgent medical help.",
+        "Ask her clinician about fever, dehydration, persistent vomiting or blood in stool. Bring the log and describe changes from her usual pattern.",
+    ]
 
     static let disclaimer = "These are general ranges drawn from pediatric guidance. Every baby is different; her pediatrician knows her, this app does not. Not medical advice."
 
@@ -235,7 +273,7 @@ enum Guidance {
             ]
         ),
         GuideStage(
-            id: "month-4", title: "Month 4", ageDays: 91...365,
+            id: "month-4", title: "Months 4–5", ageDays: 91...182,
             headline: "Rolling, grabbing, babbling. Sleep may wobble for a few weeks; that's development, not regression.",
             expectation: Expectation(feedsPerDay: 5...6, mlPerFeed: 150...210, wetDiapersPerDay: 5, sleepHours: 12...16),
             feeding: [
@@ -248,5 +286,131 @@ enum Guidance {
             checkups: ["4-month visit: second round of the 2-month vaccines."],
             watchFor: ["Not reaching for things, not making sounds, or a body that feels very stiff or very floppy."]
         ),
+        GuideStage(
+            id: "months-6-8", title: "Months 6–8", ageDays: 183...273,
+            headline: "Food joins the log. Milk feeds and family routines still matter.",
+            expectation: Expectation(sleepHours: 12...16),
+            feeding: ["Breast milk or infant formula remains the main nutrition through the first year. Record foods, textures and allergens alongside milk feeds.", "Watch hunger and fullness cues. Agree on feeding amounts with her clinician; Mina no longer sets a milk-volume target from weight."],
+            diapers: ["Record changes from her usual wet and stool pattern; food can change stools."],
+            sleep: ["The AASM sleep range for 4–12 months is 12–16 hours in 24 hours, including naps. Log nights and naps together.", "Follow her sleep cues and logged routine; Mina stops its newborn nap-window estimate at six months."],
+            growth: ["Keep measurements dated so you can review the pattern with her clinician."],
+            milestones: ["By 6 months: takes turns making sounds with you.", "By 6 months: reaches for a wanted toy.", "By 6 months: supports sitting by leaning on her hands."],
+            checkups: ["Review the 6-month visit and upcoming 9-month developmental screening in Visits & vaccines."],
+            watchFor: olderWatchFor, startMonth: 6
+        ),
+        GuideStage(
+            id: "months-9-11", title: "Months 9–11", ageDays: 274...364,
+            headline: "More foods and more ways to play. Keep the details both parents need.",
+            expectation: Expectation(sleepHours: 12...16),
+            feeding: ["Keep breast milk or infant formula alongside foods through the first year. Use Food for meals and snacks, and notes for reactions or questions."],
+            diapers: ["Compare with her own usual pattern rather than a newborn diaper quota."],
+            sleep: ["12–16 hours per 24 hours, including naps, is the AASM range. Use the log to share her current routine."],
+            growth: ["Measurements and dated notes help with the 9- and 12-month visits."],
+            milestones: ["By 9 months: looks toward you when called by name.", "By 9 months: sits with no support.", "By 9 months: moves an object between her hands."],
+            checkups: ["9-month developmental screening; plan the 12-month visit with her clinician."],
+            watchFor: olderWatchFor, startMonth: 9
+        ),
+        GuideStage(
+            id: "months-12-17", title: "Months 12–17", ageDays: 365...547,
+            headline: "The first birthday changes the routine, not the family log.",
+            expectation: Expectation(sleepHours: 11...14),
+            feeding: ["Regular meals and snacks help build a routine. Food logs can capture what she tried and common allergens.", "From 12 months, discuss milk and other drinks with her clinician. Nursing can stay in the log; Mina sets no automatic milk-feed quota."],
+            diapers: ["Keep diaper logging when useful; record toilet learning in notes without a daily diaper target."],
+            sleep: ["The AASM range for ages 1–2 is 11–14 hours per 24 hours, including naps."],
+            growth: ["Keep growth measurements and review them with her clinician. Mina's WHO girls' percentile tables end at 24 months."],
+            milestones: ["By 1 year: waves goodbye.", "By 1 year: pulls herself up to stand.", "By 1 year: walks while holding furniture."],
+            checkups: ["12- and 15-month visits; use Visits & vaccines to record completed care."],
+            watchFor: olderWatchFor, startMonth: 12
+        ),
+        GuideStage(
+            id: "months-18-23", title: "Months 18–23", ageDays: 548...729,
+            headline: "Keep track of meals, sleep and the moments you want to remember.",
+            expectation: Expectation(sleepHours: 11...14),
+            feeding: ["Offer meals and snacks at regular times, with textures appropriate for her. Record foods and questions rather than judging the day by bottle totals."],
+            diapers: ["Diapers remain available. Notes can record toilet routines or changes to discuss at a visit."],
+            sleep: ["11–14 hours per 24 hours, including naps, is the AASM range for ages 1–2."],
+            growth: ["Review her measurements over time with her clinician rather than treating a percentile as a diagnosis."],
+            milestones: ["Save new words, play and movement in dated milestone notes. Use the CDC 18-month checklist with her clinician."],
+            checkups: ["18-month developmental and autism screening; plan the 2-year visit."],
+            watchFor: olderWatchFor, startMonth: 18
+        ),
+        GuideStage(
+            id: "months-24-29", title: "Months 24–29", ageDays: 730...912,
+            headline: "Two years of history, with room for today's routines.",
+            expectation: Expectation(sleepHours: 11...14),
+            feeding: ["Keep meals and snacks in Food, allergens attached to the entry, and any feeding concerns in notes."],
+            diapers: ["Use diapers or notes as useful during toilet learning; Mina has no diaper quota for toddlers."],
+            sleep: ["11–14 hours per 24 hours, including naps, is the AASM range for two-year-olds."],
+            growth: ["Growth logging continues. Mina does not calculate percentiles beyond its 24-month tables; take measurements to her clinician."],
+            milestones: ["By 2 years: combines at least two words.", "By 2 years: kicks a ball.", "By 2 years: eats using a spoon."],
+            checkups: ["2-year visit and autism screening; 30-month developmental screening is next."],
+            watchFor: olderWatchFor, startMonth: 24
+        ),
+        GuideStage(
+            id: "months-30-35", title: "Months 30–35", ageDays: 913...1095,
+            headline: "Meals, naps, words and play: a shared record through toddlerhood.",
+            expectation: Expectation(sleepHours: 11...14),
+            feeding: ["Use Food for meals and snacks. Use notes to share routines and questions between caregivers."],
+            diapers: ["Record toilet learning in notes, with diapers still available whenever needed."],
+            sleep: ["11–14 hours per 24 hours, including naps, is the AASM range until the third birthday."],
+            growth: ["Save measurements for visits; percentiles are outside Mina's current table range."],
+            milestones: ["By 30 months: follows an instruction with two steps.", "By 30 months: uses objects for pretend play.", "By 30 months: jumps with both feet leaving the ground."],
+            checkups: ["30-month developmental screening, then the 3-year well-child visit."],
+            watchFor: olderWatchFor, startMonth: 30
+        ),
+        GuideStage(
+            id: "beyond-guide", title: "3 years & beyond", ageDays: 1096...Int.max,
+            headline: "Her log keeps going. Age-specific guidance here covers birth to the third birthday.",
+            expectation: Expectation(),
+            feeding: ["Food, bottles and nursing remain available. Set any personal targets with her clinician."],
+            diapers: ["Diapers and routine notes remain available."],
+            sleep: ["Keep logging sleep and reviewing trends with her clinician; Mina sets no age-specific target here."],
+            growth: ["Growth measurements stay in History; Mina's percentile tables stop at 24 months."],
+            milestones: [], checkups: ["The 3-year visit is in Visits & vaccines. Plan further visits with her clinician."],
+            watchFor: olderWatchFor, startMonth: 36
+        ),
     ]
+}
+
+/// Calendar-based ages shared by app, widgets and the Foundation test harness.
+enum ChildAge {
+    static func days(birthDate: Date, on date: Date = .now, calendar: Calendar = .current) -> Int {
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: birthDate), to: calendar.startOfDay(for: date)).day ?? 0
+    }
+
+    static func months(birthDate: Date, on date: Date, calendar: Calendar = .current) -> Double? {
+        let birth = calendar.startOfDay(for: birthDate), today = calendar.startOfDay(for: date)
+        guard today >= birth else { return nil }
+        var whole = calendar.dateComponents([.month], from: birth, to: today).month ?? 0
+        while let next = calendar.date(byAdding: .month, value: whole + 1, to: birth), next <= today { whole += 1 }
+        guard let lower = calendar.date(byAdding: .month, value: whole, to: birth),
+              let upper = calendar.date(byAdding: .month, value: whole + 1, to: birth) else { return nil }
+        return Double(whole) + today.timeIntervalSince(lower) / upper.timeIntervalSince(lower)
+    }
+
+    /// "5 days old", "3 weeks, 2 days old", "4 months, 1 week old".
+    static func description(birthDate: Date?, on date: Date = .now, calendar: Calendar = .current) -> String {
+        guard let birthDate else { return "" }
+        let days = Self.days(birthDate: birthDate, on: date, calendar: calendar)
+        if days < 0 { return "Arriving soon" }
+        if days == 0 { return "Born today" }
+        if days < 7 { return Format.count(days, "day") + " old" }
+        if days < 91 {
+            let weeks = days / 7, rest = days % 7
+            var text = Format.count(weeks, "week")
+            if rest > 0 { text += ", " + Format.count(rest, "day") }
+            return text + " old"
+        }
+        let birth = calendar.startOfDay(for: birthDate), today = calendar.startOfDay(for: date)
+        let months = Int(Self.months(birthDate: birthDate, on: date, calendar: calendar) ?? 0)
+        if months >= 12 {
+            let years = months / 12, rest = months % 12
+            return Format.count(years, "year") + (rest > 0 ? ", " + Format.count(rest, "month") : "") + " old"
+        }
+        let anchor = calendar.date(byAdding: .month, value: months, to: birth) ?? birth
+        let weeks = (calendar.dateComponents([.day], from: anchor, to: today).day ?? 0) / 7
+        var text = Format.count(months, "month")
+        if weeks > 0 { text += ", " + Format.count(weeks, "week") }
+        return text + " old"
+    }
 }

@@ -83,7 +83,7 @@ final class GuidanceTests: XCTestCase {
         var expectedStart = 0
         for stage in Guidance.stages {
             XCTAssertEqual(stage.ageDays.lowerBound, expectedStart, "\(stage.id) starts at \(stage.ageDays.lowerBound)")
-            expectedStart = stage.ageDays.upperBound + 1
+            if stage.ageDays.upperBound < Int.max { expectedStart = stage.ageDays.upperBound + 1 }
         }
         XCTAssertEqual(Guidance.stage(forAgeDays: 0).id, "days-1-3")
         XCTAssertEqual(Guidance.stage(forAgeDays: 20).id, "weeks-3-4")

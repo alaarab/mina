@@ -42,20 +42,20 @@ enum Goals {
     /// `weightGrams` is her latest logged weight; volume scales with it.
     static func targets(for stage: GuideStage?, ageDays: Int?, weightGrams: Double? = nil) -> [Goal.Kind: Double] {
         var t: [Goal.Kind: Double] = [:]
-        if let stage {
-            let feeds = stage.expectation.feedsPerDay
-            t[.feeds] = Double(feeds.lowerBound)
-            t[.wet] = Double(stage.expectation.wetDiapersPerDay)
-            t[.sleep] = stage.expectation.sleepHours.lowerBound
-            t[.volume] = Double(feeds.lowerBound) * stage.expectation.mlPerFeed.lowerBound
+        let knownAge = ageDays.map { $0 >= 0 } ?? false
+        if knownAge, let stage {
+            if let feeds = stage.expectation.feedsPerDay { t[.feeds] = Double(feeds.lowerBound) }
+            if let wet = stage.expectation.wetDiapersPerDay { t[.wet] = Double(wet) }
+            if let sleep = stage.expectation.sleepHours { t[.sleep] = sleep.lowerBound }
+            if let feeds = stage.expectation.feedsPerDay, let volume = stage.expectation.mlPerFeed {
+                t[.volume] = Double(feeds.lowerBound) * volume.lowerBound
+                if let weightGrams, weightGrams > 0, (ageDays ?? 0) >= 7 {
+                    t[.volume] = weightGrams / 1000 * mlPerKiloPerDay
+                }
+                t[.feedGap] = (ageDays ?? 0) < 14 ? 4 : 5
+            }
+            if let ageDays, ageDays < 28 { t[.dirty] = 3 }
         }
-        if let weightGrams, weightGrams > 0, (ageDays ?? 0) >= 7 {
-            t[.volume] = weightGrams / 1000 * mlPerKiloPerDay
-        }
-        // Dirty diapers: 3+ a day in the first weeks, then it varies too much to be a goal.
-        if let ageDays, ageDays < 28 { t[.dirty] = 3 }
-        // Wake-to-feed limit until she's back to birth weight, roughly two weeks: 4 hours; then 5.
-        t[.feedGap] = (ageDays ?? 0) < 14 ? 4 : 5
         for (kind, value) in custom() { t[kind] = value }
         return t
     }
@@ -113,7 +113,7 @@ enum Goals {
         if let limit = t[.feedGap] {
             let gap = lastFeed.map { now.timeIntervalSince($0) / 3600 } ?? 0
             let s: Goal.Status = lastFeed == nil ? .onTrack : (gap >= limit ? .short : (gap >= limit - 0.5 ? .behind : .onTrack))
-            let detail = lastFeed == nil ? "no feed yet" : (gap >= limit ? "\(Format.duration(gap * 3600)) since the last feed · time to wake her" : "\(Format.duration(gap * 3600)) since the last feed · limit \(VolumeUnit.trim(limit))h")
+            let detail = lastFeed == nil ? "no feed yet" : (gap >= limit ? "\(Format.duration(gap * 3600)) since the last feed · check her feeding plan" : "\(Format.duration(gap * 3600)) since the last feed · limit \(VolumeUnit.trim(limit))h")
             goals.append(Goal(kind: .feedGap, title: "Since last feed", value: min(gap, limit), target: limit, unit: "h", status: s, detail: detail))
         }
         return goals
@@ -124,7 +124,7 @@ enum Goals {
         if let gap = goals.first(where: { $0.kind == .feedGap }), gap.status == .short, (ageDays ?? 99) < 14 {
             return "Newborns should be woken to feed every \(VolumeUnit.trim(gap.target)) hours until they're back to birth weight."
         }
-        if let wet = goals.first(where: { $0.kind == .wet }), wet.status == .short, (ageDays ?? 0) >= 5 {
+        if let wet = goals.first(where: { $0.kind == .wet }), wet.status == .short, (ageDays ?? 0) >= 5, (ageDays ?? 0) < 183 {
             return "Fewer than \(Int(wet.target)) wet diapers after day 5 is worth a call to the pediatrician."
         }
         return nil

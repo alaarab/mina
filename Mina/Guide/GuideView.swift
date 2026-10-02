@@ -24,7 +24,7 @@ struct GuideView: View {
     }
 
     private var currentStage: GuideStage {
-        baby.ageDays().map(Guidance.stage(forAgeDays:)) ?? Guidance.stages[0]
+        baby.guideStage() ?? Guidance.stages[0]
     }
     private var stage: GuideStage {
         Guidance.stages.first { $0.id == selectedStageID } ?? currentStage
@@ -50,17 +50,25 @@ struct GuideView: View {
                     }
                     .buttonStyle(.plain)
                     GuideSection(title: "Feeding", symbol: EntryKind.bottle.symbol, color: MinaTheme.bottle, items: stage.feeding)
-                    if (baby.ageDays() ?? 0) >= 183 || stage.ageDays.contains(183) {
+                    if stage.startMonth == 6 || stage.startMonth == 9 {
                         GuideSection(title: "Starting solids", symbol: EntryKind.solid.symbol, color: EntryKind.solid.color, items: Guidance.solids)
                     }
                     GuideSection(title: "Diapers", symbol: EntryKind.diaper.symbol, color: MinaTheme.diaper, items: stage.diapers)
                     GuideSection(title: "Sleep", symbol: EntryKind.sleep.symbol, color: MinaTheme.sleep, items: stage.sleep)
                     GuideSection(title: "Growth", symbol: "chart.line.uptrend.xyaxis", color: MinaTheme.accent, items: stage.growth)
-                    milestoneSection
+                    if !stage.milestones.isEmpty { milestoneSection }
                     GuideSection(title: "Checkups", symbol: "stethoscope", color: MinaTheme.note, items: stage.checkups)
                     GuideSection(title: "Worth a call", symbol: "exclamationmark.bubble.fill", color: MinaTheme.warning, items: stage.watchFor)
-                    GuideSection(title: "Call the doctor, any age", symbol: "phone.fill", color: MinaTheme.danger, items: Guidance.callTheDoctor)
-                    GuideSection(title: "Everyday", symbol: "house.fill", color: MinaTheme.textSecondary, items: Guidance.everyday)
+                    GuideSection(title: "When to get help", symbol: "phone.fill", color: MinaTheme.danger, items: stage.startMonth == nil ? Guidance.callTheDoctor : Guidance.olderCallTheDoctor)
+                    GuideSection(title: "Everyday", symbol: "house.fill", color: MinaTheme.textSecondary, items: stage.startMonth == nil ? Guidance.everyday : Guidance.olderEveryday)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Sources").font(.mina(.headline))
+                        ForEach(Guidance.sources, id: \.url) { source in
+                            if let url = URL(string: source.url) {
+                                Link(source.title, destination: url).frame(minHeight: 44, alignment: .leading)
+                            }
+                        }
+                    }.minaCard()
                     Text(Guidance.disclaimer)
                         .font(.mina(.caption))
                         .foregroundStyle(MinaTheme.textMuted)
@@ -79,8 +87,10 @@ struct GuideView: View {
 
     /// Each milestone is a checkbox; ticking it logs the date, so the guide doubles as her baby book.
     private var milestoneSection: some View {
-        let done = Dictionary(uniqueKeysWithValues: milestones.compactMap { entry in entry.label.map { ($0, entry) } })
+        let done = Dictionary(milestones.compactMap { entry in entry.label.map { ($0, entry) } }, uniquingKeysWith: { first, _ in first })
         return VStack(alignment: .leading, spacing: 10) {
+            Text("Dated memories, not a developmental screening test. Discuss concerns or lost skills with her clinician.")
+                .font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
             HStack(spacing: 8) {
                 Image(systemName: "star.fill").font(.subheadline.weight(.semibold)).foregroundStyle(MinaTheme.warning).accessibilityHidden(true)
                 Text("What she's learning").font(.mina(.headline))
@@ -147,16 +157,23 @@ struct GuideView: View {
                             .overlay(Capsule().strokeBorder(isSelected ? .clear : MinaTheme.border, lineWidth: 1))
                             .foregroundStyle(isSelected ? .white : MinaTheme.text)
                             .padding(.vertical, 4)
+                            .frame(minHeight: 44)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("guide-stage-\(candidate.id)")
                         .accessibilityLabel(isCurrent ? "\(candidate.title), her stage now" : candidate.title)
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                         .id(candidate.id)
                     }
                 }
             }
+            .accessibilityIdentifier("guide-stage-picker")
             .onAppear { proxy.scrollTo(currentStage.id, anchor: .center) }
+            .onChange(of: currentStage.id) { _, id in
+                selectedStageID = nil
+                proxy.scrollTo(id, anchor: .center)
+            }
         }
     }
 
@@ -178,9 +195,15 @@ struct GuideView: View {
                 .foregroundStyle(MinaTheme.textSecondary)
             Divider()
             // Four chips across; two rows of two once text is large.
-            let chips = [("Feeds", stage.expectation.feedsText(), MinaTheme.bottle), ("Per feed", stage.expectation.perFeedText(unit: unit), MinaTheme.bottle),
-                         ("Wet", stage.expectation.wetText() + " a day", MinaTheme.diaper), ("Sleep", stage.expectation.sleepText() + " a day", MinaTheme.sleep)]
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 2 : 4), alignment: .leading, spacing: 10) {
+            let chips: [(String, String, Color)] = {
+                var values: [(String, String, Color)] = []
+                if stage.expectation.feedsPerDay != nil { values.append(("Feeds", stage.expectation.feedsText(), MinaTheme.bottle)) }
+                if stage.expectation.mlPerFeed != nil { values.append(("Per feed", stage.expectation.perFeedText(unit: unit), MinaTheme.bottle)) }
+                if stage.expectation.wetDiapersPerDay != nil { values.append(("Wet", stage.expectation.wetText() + " a day", MinaTheme.diaper)) }
+                if stage.expectation.sleepHours != nil { values.append(("Sleep", stage.expectation.sleepText() + " a day", MinaTheme.sleep)) }
+                return values
+            }()
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 2 : max(1, chips.count)), alignment: .leading, spacing: 10) {
                 ForEach(chips, id: \.0) { chip in
                     ExpectChip(label: chip.0, value: chip.1, color: chip.2)
                 }

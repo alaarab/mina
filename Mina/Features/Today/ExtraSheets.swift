@@ -74,14 +74,14 @@ struct ExtraSheet: View {
                 case .growth:
                     Section("Weight") {
                         if bodyUnit.isImperial {
-                            Stepper("\(pounds) lb", value: $pounds, in: 0...40)
+                            Stepper("\(pounds) lb", value: $pounds, in: 0...60)
                             Stepper("\(VolumeUnit.trim(ounces)) oz", value: $ounces, in: 0...15.5, step: 0.5)
                         } else {
                             Stepper("\(VolumeUnit.trim(kilograms)) kg", value: $kilograms, in: 0...30, step: 0.05)
                         }
                     }
                     Section("Length and head") {
-                        Stepper("Length \(VolumeUnit.trim(length)) \(lengthUnit)", value: $length, in: 0...(bodyUnit.isImperial ? 40 : 100), step: bodyUnit.isImperial ? 0.25 : 0.5)
+                        Stepper("Length \(VolumeUnit.trim(length)) \(lengthUnit)", value: $length, in: 0...(bodyUnit.isImperial ? 50 : 127), step: bodyUnit.isImperial ? 0.25 : 0.5)
                         Stepper("Head \(VolumeUnit.trim(head)) \(lengthUnit)", value: $head, in: 0...(bodyUnit.isImperial ? 25 : 60), step: bodyUnit.isImperial ? 0.25 : 0.5)
                     }
                 case .medicine:

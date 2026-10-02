@@ -10,6 +10,7 @@ import Foundation
 /// Totals for one calendar day. Sleep is clipped to the day, so a nap that
 /// crosses midnight counts on both sides, and an ongoing sleep counts up to now.
 struct DaySummary {
+    var foods = 0
     var feeds = 0
     var bottleML = 0.0
     var nursingCount = 0
@@ -65,9 +66,11 @@ struct DaySummary {
             case .pumping:
                 guard inDay else { continue }
                 pumpedML += entry.amountML
+            case .solid:
+                if inDay { foods += 1 }
             // The rest are logged and shown as rows, but nothing on any screen
             // counts them, so a day's totals don't carry them.
-            case .tummyTime, .growth, .medicine, .bath, .temperature, .milestone, .stash, .solid, .vaccine, .checkup:
+            case .tummyTime, .growth, .medicine, .bath, .temperature, .milestone, .stash, .vaccine, .checkup:
                 continue
             }
         }

@@ -268,30 +268,15 @@ extension Baby {
     }
 
     func ageDays(on date: Date = .now, calendar: Calendar = .current) -> Int? {
-        guard let birthDate else { return nil }
-        let from = calendar.startOfDay(for: birthDate)
-        let to = calendar.startOfDay(for: date)
-        return calendar.dateComponents([.day], from: from, to: to).day
+        birthDate.map { ChildAge.days(birthDate: $0, on: date, calendar: calendar) }
     }
 
-    /// "5 days old", "3 weeks, 2 days old", "4 months, 1 week old".
+    func guideStage(on date: Date = .now, calendar: Calendar = .current) -> GuideStage? {
+        birthDate.map { Guidance.stage(birthDate: $0, on: date, calendar: calendar) }
+    }
+
     func ageDescription(on date: Date = .now, calendar: Calendar = .current) -> String {
-        guard let days = ageDays(on: date, calendar: calendar), let birthDate else { return "" }
-        if days < 0 { return "Arriving soon" }
-        if days == 0 { return "Born today" }
-        if days < 7 { return Format.count(days, "day") + " old" }
-        if days < 91 {
-            let weeks = days / 7, rest = days % 7
-            var text = Format.count(weeks, "week")
-            if rest > 0 { text += ", " + Format.count(rest, "day") }
-            return text + " old"
-        }
-        let components = calendar.dateComponents([.month, .day], from: calendar.startOfDay(for: birthDate), to: calendar.startOfDay(for: date))
-        let months = components.month ?? 0
-        let weeks = (components.day ?? 0) / 7
-        var text = Format.count(months, "month")
-        if weeks > 0 { text += ", " + Format.count(weeks, "week") }
-        return text + " old"
+        ChildAge.description(birthDate: birthDate, on: date, calendar: calendar)
     }
 }
 

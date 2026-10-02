@@ -41,10 +41,14 @@ struct CareScheduleView: View {
                         }
                         Spacer(minLength: 0)
                     }
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(item.title), \(done ? "done" : "not done"), \(item.detail)")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.title)
+                .accessibilityValue([done ? "done" : "not done", baby.birthDate.map { item.due(from: $0).formatted(date: .abbreviated, time: .omitted) }, item.detail].compactMap { $0 }.joined(separator: ", "))
+                .accessibilityHint(done ? "Removes completion from her log" : "Logs completion with today's date")
                 .accessibilityAddTraits(.isToggle)
             }
         }

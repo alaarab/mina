@@ -75,6 +75,7 @@ struct SettingsView: View {
                         .onChange(of: birthDate) { _, value in
                             baby.birthDate = value
                             try? context.save()
+                            CareSchedule.scheduleReminders(for: baby, in: context)
                         }
                     Button { addingBaby = true } label: { Label("Add another baby", systemImage: "plus") }
                 }
@@ -143,7 +144,7 @@ struct SettingsView: View {
                             .onChange(of: feedAlarm) { _, on in
                                 if on {
                                     let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
-                                    let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+                                    let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.guideStage())
                                     FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
                                 } else { FeedAlarm.cancel() }
                             }
@@ -153,7 +154,7 @@ struct SettingsView: View {
                             }
                             .onChange(of: feedAlarmGap) { _, _ in
                                 let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
-                                let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+                                let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.guideStage())
                                 FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
                             }
                         }
@@ -221,7 +222,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Goals")
                 } footer: {
-                    Text("Feeds, milk by bottle, wet and dirty diapers, sleep and the longest gap between feeds, judged against the time of day. Milk follows her latest logged weight (about 2½ oz per pound a day) once she's a week old. Targets follow her age unless you set your own, for instance from a pediatrician's plan.")
+                    Text("Feeds, milk by bottle, wet and dirty diapers, sleep and the longest gap between feeds, judged against the time of day. Milk follows her latest logged weight only from one week to six months. From six months, milk, feed-gap and diaper targets follow your own plan; sleep guidance continues until her third birthday. Set custom targets with her clinician when useful.")
                 }
 
                 Section {
@@ -475,7 +476,7 @@ extension SettingsView {
 
     func rearmAfterQuietChange() {
         let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
-        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.guideStage())
         Reminders.scheduleFeed(Shifts.thisPhoneIsOn(for: baby) ? prediction : nil, babyName: baby.displayName)
         FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, force: true)
     }
@@ -493,7 +494,7 @@ struct GoalsSettingsView: View {
 
     @Environment(\.managedObjectContext) private var context
     private var unit: VolumeUnit { Prefs.unit }
-    private var defaults: [Goal.Kind: Double] { Goals.targets(for: baby.ageDays().map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context)) }
+    private var defaults: [Goal.Kind: Double] { Goals.targets(for: baby.guideStage(), ageDays: baby.ageDays(), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context)) }
 
     var body: some View {
         Form {

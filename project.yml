@@ -194,6 +194,18 @@ schemes:
         - MinaTests
     archive:
       config: Release
+  AgeSupport:
+    build:
+      targets:
+        Mina: all
+        MinaTests: [test]
+        MinaUITests: [test]
+    test:
+      config: Debug
+      debugEnabled: false
+      targets:
+        - MinaTests
+        - MinaUITests
   TrailerTour:
     build:
       targets:

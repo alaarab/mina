@@ -10,15 +10,15 @@ enum AskContext {
         var lines: [String] = []
         lines.append("Baby: \(babyName), \(age).")
         if let stage {
-            lines.append("Stage: \(stage.title). Typical: \(stage.expectation.feedsText()) feeds, \(stage.expectation.perFeedText(unit: unit)), \(stage.expectation.wetText()) diapers, \(stage.expectation.sleepText()) sleep.")
+            lines.append("Stage: \(stage.title). Milk feeds: \(stage.expectation.feedsText()); bottle amount: \(stage.expectation.perFeedText(unit: unit)); wet diapers: \(stage.expectation.wetText()); sleep: \(stage.expectation.sleepText()).")
             lines.append("Feeding notes: " + stage.feeding.joined(separator: " "))
             lines.append("Sleep notes: " + stage.sleep.joined(separator: " "))
             lines.append("Watch for: " + stage.watchFor.joined(separator: " "))
         }
-        lines.append("Daily totals, oldest first (day: feeds, bottle, nursing min, wet, dirty, sleep, longest sleep):")
+        lines.append("Daily totals, oldest first (day: milk feeds, food entries, bottle, nursing min, wet, dirty, sleep, longest sleep):")
         for stat in stats {
             let s = stat.summary
-            lines.append("\(stat.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())): \(s.feeds), \(unit.format(ml: s.bottleML)), \(Int(s.nursingSeconds / 60)), \(s.wet), \(s.dirty), \(Format.duration(s.sleepSeconds)), \(Format.duration(stat.longestSleep))")
+            lines.append("\(stat.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())): \(s.feeds), \(s.foods), \(unit.format(ml: s.bottleML)), \(Int(s.nursingSeconds / 60)), \(s.wet), \(s.dirty), \(Format.duration(s.sleepSeconds)), \(Format.duration(stat.longestSleep))")
         }
         if !recent.isEmpty {
             lines.append("Most recent entries, newest first:")
@@ -28,9 +28,9 @@ enum AskContext {
     }
 
     static let instructions = """
-    You are a calm, practical helper inside a newborn tracking app, answering a parent's questions about their own baby's log. \
+    You are a calm, practical helper inside a family infant and toddler tracking app, answering a parent's questions about their own baby's log. \
     Use only the data provided and the stage notes. Be concrete: cite the numbers and days you used. Keep answers under 120 words. \
-    If something looks concerning (fever of 38 C or 100.4 F under 3 months, fewer than 6 wet diapers after day 5, not waking to feed), say to call the pediatrician. \
+    Use concerns from the provided age-specific stage notes. Do not apply newborn feeding or diaper thresholds to toddlers. If something looks concerning, say to contact the pediatrician. \
     Never diagnose. If the data doesn't answer the question, say so.
     """
 }
@@ -280,7 +280,7 @@ struct AskView: View {
     @available(iOS 26.0, *)
     private func session() -> LanguageModelSession {
         if let existing = chat.model as? LanguageModelSession { return existing }
-        let stage = baby.ageDays().map(Guidance.stage(forAgeDays:))
+        let stage = baby.guideStage()
         let context = AskContext.build(babyName: baby.displayName, age: baby.ageDescription(), stage: stage, stats: stats, recent: recent, unit: unit)
         let made = LanguageModelSession(instructions: AskContext.instructions + "\n\nDATA:\n" + context)
         chat.model = made
