@@ -103,3 +103,13 @@ height, and retains a screenshot. These **22 iOS tests have not run**.
 Production schema deployment and photo/sync/widget/partner-alert/Watch physical
 checks remain open. No production schema edits, direct phone install, public
 submission, release upload, merge, deployment or Hook restart was performed.
+
+## Local review hand-off
+
+Implementation commit: `dbeea4bcda53c727245c6569c4d9bc7f3ef8bda2`.
+The feature branch is local. Automatic approval review rejected its remote push
+because pushing publishes repository contents and the brief prohibits publishing.
+No remote branch or PR was created. Draft PR text is retained in the main
+checkout's `.dd-age-core-evidence-20261002/draft-pr.md` for integration review.
+`dispatch_report` identifies the repository as context and explicitly reports
+local-only evidence; that repository URL is not a live PR.
