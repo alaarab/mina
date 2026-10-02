@@ -35,8 +35,8 @@ enum Predictor {
                 : sorted[sorted.count / 2]
             return FeedPrediction(expectedAt: last.addingTimeInterval(median), interval: median, basis: "her last \(intervals.count + 1) feeds")
         }
-        guard let stage else { return nil }
-        let perDay = Double(stage.expectation.feedsPerDay.lowerBound + stage.expectation.feedsPerDay.upperBound) / 2
+        guard let stage, let feeds = stage.expectation.feedsPerDay else { return nil }
+        let perDay = Double(feeds.lowerBound + feeds.upperBound) / 2
         let interval = 86_400 / perDay
         return FeedPrediction(expectedAt: last.addingTimeInterval(interval), interval: interval, basis: "typical for \(stage.title.lowercased())")
     }
@@ -51,8 +51,10 @@ enum Predictor {
         }
     }
 
-    static func nextNap(lastWake: Date?, ageDays: Int?, now: Date = .now) -> NapPrediction? {
-        guard let lastWake, let ageDays else { return nil }
+    static func nextNap(lastWake: Date?, ageDays: Int?, now: Date = .now, stage: GuideStage? = nil) -> NapPrediction? {
+        guard let lastWake, let ageDays, ageDays >= 0 else { return nil }
+        if let stage { guard stage.startMonth == nil else { return nil } }
+        else { guard ageDays < 183 else { return nil } }
         let window = wakeWindow(ageDays: ageDays)
         return NapPrediction(expectedAt: lastWake.addingTimeInterval(window), wakeWindow: window)
     }

@@ -165,16 +165,39 @@ rather than kilobytes; the file's `photoCount` and `photoBytes` say how much.
 ## Predictions, trends, milestones
 
 - **Next feed**: median gap of her last feeds (age norm until there are enough), shown on
-  Today and, if you turn it on in Settings, a reminder at that time.
+  Today and, if you turn it on in Settings, a reminder at that time. From six months,
+  predictions require enough logged milk feeds; there is no age-based fallback.
 - **Nap window**: last wake plus the wake window for her age (50 min at 0–4 weeks, up to
-  105 min after 3 months).
+  105 min after 3 months), ending at six months. Older children use their logged sleep
+  routine rather than a newborn wake-window estimate.
 - **Trends** tab: 14-day charts for bottle volume and feed count, sleep with the longest
-  stretch, and wet/dirty diapers; 7-day averages; growth entries; **Share report** makes a
+  stretch, wet/dirty diapers and food entries; 7-day averages; growth entries; **Share report** makes a
   one-page PDF for the pediatrician.
 - **History** (Calendar → magnifier): every entry, searchable, filtered by feeds, diapers, sleep, health or notes, grouped by day; the month title jumps to any of the last 24 months.
 - **Nursing timer**: tap Nurse, pick the side (it suggests the one she didn't finish on), switch sides or stop from Today; the split is saved on the entry.
 - **Milestones**: in the Guide, tap a milestone when she does it; it's logged with the date
   and shows up on the timeline and in the report.
+
+## Growing with her
+
+Age-specific Guide content covers birth to the third birthday, with calendar-based
+stages for 6–8, 9–11, 12–17, 18–23, 24–29 and 30–35 months. The guide links to CDC,
+AAP and AASM sources. Visits & vaccines includes the 30-month and 3-year visits.
+Correcting her birthday updates the stage and care reminder dates without changing
+entries, milestone dates or sharing.
+
+Food is available under Today → Food, milk stash, growth and more. Log meals,
+snacks and common allergens; food entries have their own Today total, Trends chart,
+weekly digest count and report rows. Milk feeds stay separate. Use notes for toilet
+learning, routines and questions for visits.
+
+Automatic milk, feed-gap and diaper targets end at six months. Sleep guidance
+continues until the third birthday; custom targets stay saved until you change them.
+Growth logging continues, with WHO girls' percentiles only through 24 months.
+All logging, family features, search and export remain available at later ages.
+Calendar arrows can reach older months beyond the 24-month quick-jump menu.
+
+See [the age-support audit and validation notes](docs/AGE-SUPPORT.md).
 
 ## Nanit (off in App Store builds)
 

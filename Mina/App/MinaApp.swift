@@ -29,7 +29,7 @@ struct MinaApp: App {
         }
         Logbook.feedLogged = { baby, context in
             let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
-            let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+            let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.guideStage())
             if Shifts.thisPhoneIsOn(for: baby) {
                 FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName)
             } else {
@@ -131,7 +131,6 @@ struct RootView: View {
                 MainTabs(baby: baby).id(baby.objectID)
                     .task { WatchBridge.shared.refresh(for: baby, in: context) }
                     .task { WeeklyDigest.schedule(for: baby, in: context) }
-                    .task { CareSchedule.scheduleReminders(for: baby, in: context) }
                     .task { await CareTimerActivities.reconcile(for: baby, in: context) }
                     .task { PartnerAlerts.shared.removeCloudSubscriptionIfPresent() }
             } else {
@@ -169,6 +168,7 @@ struct RootView: View {
 }
 
 struct MainTabs: View {
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var baby: Baby
     @State private var tab = DebugLaunch.initialTab ?? "today"
     @State private var showingWhatsNew = Changelog.shouldShow && !DebugLaunch.isDemo
@@ -191,6 +191,7 @@ struct MainTabs: View {
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 .tag("settings")
         }
+        .task(id: baby.birthDate) { CareSchedule.scheduleReminders(for: baby, in: context) }
         .onAppear { if !DebugLaunch.isDemo { PartnerAlerts.shared.requestPermission() } }
         .sheet(isPresented: $showingWhatsNew, onDismiss: { Changelog.markSeen() }) { WhatsNewView(onlyNewest: true).minaSheet() }
     }

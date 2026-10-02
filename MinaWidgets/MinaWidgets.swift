@@ -41,7 +41,7 @@ struct MinaSnapshot {
             snapshot.dirty = summary.dirty
             snapshot.sleepSeconds = summary.sleepSeconds
             snapshot.sleepingSince = Logbook.shared.ongoingSleep(for: baby, in: context)?.startedAt
-            let goals = Goals.evaluate(summary: summary, lastFeed: snapshot.lastFeedAt, stage: baby.ageDays(on: now).map(Guidance.stage(forAgeDays:)), ageDays: baby.ageDays(on: now), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context), now: now)
+            let goals = Goals.evaluate(summary: summary, lastFeed: snapshot.lastFeedAt, stage: baby.guideStage(on: now), ageDays: baby.ageDays(on: now), weightGrams: Logbook.shared.latestWeightGrams(for: baby, in: context), now: now)
             snapshot.goalLine = goals.filter { $0.kind != .feedGap && $0.kind != .dirty }.map { g in
                 switch g.kind {
                 case .sleep: return "\(Format.duration(g.value * 3600))/\(VolumeUnit.trim(g.target))h"

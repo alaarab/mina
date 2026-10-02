@@ -15,6 +15,7 @@ enum WeeklyDigest {
     }
 
     struct Summary: Equatable {
+        var foods = 0
         var feeds = 0
         var bottleML = 0.0
         var wet = 0
@@ -29,7 +30,7 @@ enum WeeklyDigest {
         for offset in 0..<days {
             guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
             let d = DaySummary(entries: entries, day: day, now: now, calendar: calendar)
-            s.feeds += d.feeds; s.bottleML += d.bottleML; s.wet += d.wet; s.dirty += d.dirty; s.sleepSeconds += d.sleepSeconds
+            s.foods += d.foods; s.feeds += d.feeds; s.bottleML += d.bottleML; s.wet += d.wet; s.dirty += d.dirty; s.sleepSeconds += d.sleepSeconds
             s.nights += 1
         }
         s.longestSleep = entries.filter { $0.kind == .sleep && $0.endedAt != nil && ($0.startedAt ?? .distantPast) >= start }.map { $0.duration(now: now) ?? 0 }.max() ?? 0
@@ -39,9 +40,11 @@ enum WeeklyDigest {
     /// "This week: 52 feeds (17 oz a day), 41 wet, 12 dirty, 14h 20m sleep a day, longest stretch 5h 10m. Up 2 oz a day on last week."
     static func text(this: Summary, last: Summary?, unit: VolumeUnit, babyName: String) -> String {
         let days = max(1, this.nights)
-        var parts = ["\(this.feeds) feeds"]
+        var parts: [String] = []
+        if this.feeds > 0 || this.foods == 0 { parts.append("\(this.feeds) feeds") }
+        if this.foods > 0 { parts.append(Format.count(this.foods, "food entry", "food entries")) }
         if this.bottleML > 0 { parts.append("\(unit.format(ml: this.bottleML / Double(days))) a day by bottle") }
-        parts.append("\(this.wet) wet and \(this.dirty) dirty diapers")
+        if this.wet + this.dirty > 0 || this.foods == 0 { parts.append("\(this.wet) wet and \(this.dirty) dirty diapers") }
         parts.append("\(Format.duration(this.sleepSeconds / Double(days))) of sleep a day")
         if this.longestSleep > 0 { parts.append("longest stretch \(Format.duration(this.longestSleep))") }
         var text = "\(babyName) this week: " + parts.joined(separator: ", ") + "."
@@ -78,10 +81,10 @@ enum WeeklyDigest {
         let entries = Logbook.shared.entries(for: baby, from: calendar.date(byAdding: .day, value: -1, to: lastStart) ?? lastStart, in: context)
         let this = summary(entries: entries, from: weekStart, days: 7, now: now, calendar: calendar)
         let last = summary(entries: entries, from: lastStart, days: 7, now: now, calendar: calendar)
-        guard this.feeds + this.wet + this.dirty > 0 else { return }
+        guard this.foods + this.feeds + this.wet + this.dirty > 0 || this.sleepSeconds > 0 else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(baby.displayName)'s week"
-        content.body = text(this: this, last: last.feeds + last.wet > 0 ? last : nil, unit: Prefs.unit, babyName: baby.displayName)
+        content.body = text(this: this, last: last.foods + last.feeds + last.wet > 0 || last.sleepSeconds > 0 ? last : nil, unit: Prefs.unit, babyName: baby.displayName)
         content.sound = .default
         content.threadIdentifier = "digest"
         content.interruptionLevel = .passive

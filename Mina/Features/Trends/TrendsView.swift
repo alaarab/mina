@@ -62,7 +62,7 @@ struct TrendsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    let logged = stats.filter { $0.summary.feeds + $0.summary.diapers > 0 || $0.summary.sleepSeconds > 0 }.count
+                    let logged = stats.filter { $0.summary.feeds + $0.summary.foods + $0.summary.diapers > 0 || $0.summary.sleepSeconds > 0 }.count
                     if logged < 7 {
                         Label(logged == 0 ? "Trends fill in as you log. Come back after a few days."
                               : "Trends fill in as the week goes. \(Format.count(logged, "day")) logged so far.", systemImage: "chart.bar")
@@ -71,6 +71,9 @@ struct TrendsView: View {
                             .minaCard(padding: 12)
                     }
                     weekSummary(week)
+                    if week.contains(where: { $0.summary.foods > 0 }) || (baby.guideStage()?.startMonth ?? 0) >= 6 {
+                        foodChart(stats)
+                    }
                     feedChart(stats)
                     sleepChart(stats)
                     diaperChart(stats)
@@ -96,7 +99,7 @@ struct TrendsView: View {
                     }
                 }
             }
-            .task(id: entries.count) { reportURL = await Report.render(baby: baby, stats: week, entries: Array(entries), unit: unit) }
+            .task(id: "\(entries.count)-\(baby.birthDate?.timeIntervalSince1970 ?? 0)-\(unit.rawValue)") { reportURL = await Report.render(baby: baby, stats: week, entries: Array(entries), unit: unit) }
             .sheet(isPresented: $asking) {
                 AskView(baby: baby, stats: stats, recent: entries.prefix(12).map { "\(($0.startedAt ?? .now).formatted(.dateTime.weekday(.abbreviated).hour().minute())): \($0.title(unit: unit))" }, unit: unit)
             }
@@ -114,7 +117,12 @@ struct TrendsView: View {
         let longest = week.map(\.longestSleep).max() ?? 0
         return VStack(alignment: .leading, spacing: 10) {
             Text("Last 7 days, per day").font(.mina(.headline))
-            StatTiles {
+            StatTiles(columns: week.contains(where: { $0.summary.foods > 0 }) || (baby.guideStage()?.startMonth ?? 0) >= 6 ? 4 : 3) {
+                if week.contains(where: { $0.summary.foods > 0 }) || (baby.guideStage()?.startMonth ?? 0) >= 6 {
+                    NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
+                        StatTile(title: "Food", value: String(format: "%.1f", TrendMath.average(week.map { Double($0.summary.foods) })), color: EntryKind.solid.color, detail: "meals & snacks logged", expect: nil)
+                    }
+                }
                 NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
                     StatTile(title: "Feeds", value: String(format: "%.1f", feeds), color: MinaTheme.bottle, detail: ml > 0 ? "\(unit.format(ml: ml)) by bottle" : "no bottles", expect: nil)
                 }
@@ -148,6 +156,23 @@ struct TrendsView: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Text("Number above each bar is the feed count, nursing included.").font(.mina(.caption2)).foregroundStyle(MinaTheme.textMuted)
             }
+        }
+        .minaCard()
+    }
+
+    private func foodChart(_ stats: [DayStat]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Food entries per day").font(.mina(.headline))
+            Chart(stats) { stat in
+                BarMark(x: .value("Day", stat.day, unit: .day), y: .value("Food entries", stat.summary.foods))
+                    .foregroundStyle(EntryKind.solid.color)
+                    .cornerRadius(4)
+            }
+            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()) } }
+            .frame(height: chartHeight)
+            .accessibilityLabel("Food entries per day, last 14 days")
+            Text("Counts are logged meals and snacks, not an intake target.")
+                .font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
         }
         .minaCard()
     }
@@ -262,13 +287,14 @@ private struct ReportPage: View {
                 .font(.system(size: 12)).foregroundStyle(.secondary)
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                 GridRow {
-                    ForEach(["Day", "Feeds", "Bottle", "Nursing", "Wet", "Dirty", "Sleep", "Longest"], id: \.self) { Text($0).font(.system(size: 11, weight: .semibold)) }
+                    ForEach(["Day", "Feeds", "Food", "Bottle", "Nursing", "Wet", "Dirty", "Sleep", "Longest"], id: \.self) { Text($0).font(.system(size: 11, weight: .semibold)) }
                 }
                 Divider()
                 ForEach(stats) { stat in
                     GridRow {
                         Text(stat.day.formatted(.dateTime.weekday(.abbreviated).day()))
                         Text("\(stat.summary.feeds)")
+                        Text("\(stat.summary.foods)")
                         Text(unit.format(ml: stat.summary.bottleML))
                         Text(stat.summary.nursingSeconds > 0 ? Format.duration(stat.summary.nursingSeconds) : "–")
                         Text("\(stat.summary.wet)")
@@ -287,6 +313,13 @@ private struct ReportPage: View {
                     Text("\((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .omitted)): \(entry.title(unit: unit))\(percentile.isEmpty ? "" : " · \(percentile)")").font(.system(size: 11))
                 }
                 Text("Percentiles use WHO girls' standards and are not a diagnosis.").font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+            let foods = entries.filter { $0.kind == .solid }
+            if !foods.isEmpty {
+                Text("Foods and allergens").font(.system(size: 14, weight: .semibold))
+                ForEach(foods.prefix(20)) { entry in
+                    Text("\((entry.startedAt ?? .now).formatted(date: .abbreviated, time: .shortened)): \(entry.title(unit: unit))").font(.system(size: 11))
+                }
             }
             let medicine = entries.filter { $0.kind == .medicine || $0.kind == .temperature }
             if !medicine.isEmpty {

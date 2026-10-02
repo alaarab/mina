@@ -95,9 +95,9 @@ private struct TodayContent: View {
             }
             let ageDays = baby.ageDays(on: now)
             summary = DaySummary(entries: all, day: now, now: now)
-            stage = ageDays.map(Guidance.stage(forAgeDays:))
+            stage = baby.guideStage(on: now)
             feedPrediction = Predictor.nextFeed(feedTimes: feedTimes, stage: stage, now: now)
-            napPrediction = sleeping == nil ? Predictor.nextNap(lastWake: lastWake, ageDays: ageDays, now: now) : nil
+            napPrediction = sleeping == nil ? Predictor.nextNap(lastWake: lastWake, ageDays: ageDays, now: now, stage: stage) : nil
             goals = Goals.evaluate(summary: summary, lastFeed: lastFeed?.startedAt, stage: stage, ageDays: ageDays, weightGrams: all.first { $0.kind == .growth && $0.weightGrams > 0 }?.weightGrams ?? weightGrams, now: now)
             sections = DayGrouping.days(all, missing: now)
         }
@@ -391,6 +391,10 @@ private struct TodayContent: View {
             } else {
                 HStack { heading; Spacer(); stage }
             }
+            if goals.isEmpty {
+                Text("Keep logging her routine. Set personal targets in Settings if useful.")
+                    .font(.mina(.caption)).foregroundStyle(MinaTheme.textMuted)
+            }
             ForEach(goals) { goal in
                 HStack(spacing: 12) {
                     GoalRing(progress: goal.progress, status: goal.status, kind: goal.kind)
@@ -417,21 +421,26 @@ private struct TodayContent: View {
     private func statsRow(_ day: Day) -> some View {
         let summary = day.summary
         let stage = day.stage
-        return StatTiles {
+        return StatTiles(columns: summary.foods > 0 || (stage?.startMonth ?? 0) >= 6 ? 4 : 3) {
+            if summary.foods > 0 || (stage?.startMonth ?? 0) >= 6 {
+                NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
+                    StatTile(title: "Food", value: "\(summary.foods)", color: EntryKind.solid.color, detail: "meals & snacks logged", expect: nil)
+                }
+            }
             NavigationLink { HistoryView(baby: baby, filter: .feeds) } label: {
                 StatTile(title: "Feeds", value: "\(summary.feeds)", color: MinaTheme.bottle,
                          detail: feedDetail(summary),
-                         expect: stage.map { "expect \($0.expectation.feedsText())" })
+                         expect: stage.flatMap { $0.expectation.feedsPerDay == nil ? nil : "expect \($0.expectation.feedsText())" })
             }
             NavigationLink { HistoryView(baby: baby, filter: .diapers) } label: {
                 StatTile(title: "Diapers", value: "\(summary.diapers)", color: MinaTheme.diaper,
                          detail: "\(summary.wet) wet · \(summary.dirty) dirty",
-                         expect: stage.map { "expect \($0.expectation.wetText())" })
+                         expect: stage.flatMap { $0.expectation.wetDiapersPerDay == nil ? nil : "expect \($0.expectation.wetText())" })
             }
             NavigationLink { HistoryView(baby: baby, filter: .sleep) } label: {
                 StatTile(title: "Sleep", value: summary.sleepSeconds > 0 ? Format.duration(summary.sleepSeconds) : "0m", color: MinaTheme.sleep,
                          detail: Format.count(summary.sleeps, "stretch", "stretches"),
-                         expect: stage.map { "expect \($0.expectation.sleepText())" })
+                         expect: stage.flatMap { $0.expectation.sleepHours == nil ? nil : "expect \($0.expectation.sleepText())" })
             }
         }
     }
@@ -476,14 +485,15 @@ private struct TodayContent: View {
                 }
             }
             Menu {
-                ForEach(EntryKind.extras.filter { $0 != .pumping && ($0 != .solid || (baby.ageDays(on: now) ?? 0) >= 183) }) { kind in
+                ForEach(EntryKind.extras.filter { $0 != .pumping }) { kind in
                     Button(kind.title, systemImage: kind.symbol) {
                         if kind == .bath { log(EntryDraft(kind: .bath, startedAt: now)) } else { sheet = .extra(kind) }
                     }
                 }
             } label: {
-                Label("Milk stash, growth, medicine and more", systemImage: "plus.circle").pillLabel()
+                Label("Food, milk stash, growth and more", systemImage: "plus.circle").pillLabel()
             }
+            .accessibilityIdentifier("quick-log-more")
         }
     }
 
@@ -541,6 +551,7 @@ private struct TodayContent: View {
         if summary.feeds > 0 {
             parts.append(Format.count(summary.feeds, "feed") + (summary.bottleML > 0 ? " · \(unit.format(ml: summary.bottleML))" : ""))
         }
+        if summary.foods > 0 { parts.append(Format.count(summary.foods, "food entry", "food entries")) }
         if summary.diapers > 0 { parts.append(Format.count(summary.diapers, "diaper")) }
         if summary.sleepSeconds > 0 { parts.append("\(Format.duration(summary.sleepSeconds)) sleep") }
         if summary.pumpedML > 0 { parts.append("\(unit.format(ml: summary.pumpedML)) pumped") }
@@ -562,7 +573,7 @@ private struct TodayContent: View {
         Quiet.resume()
         quietTick &+= 1
         let last = Logbook.shared.lastFeed(for: baby, in: context)?.startedAt
-        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.ageDays().map(Guidance.stage(forAgeDays:)))
+        let prediction = Predictor.nextFeed(feedTimes: Logbook.shared.recentFeedTimes(for: baby, in: context), stage: baby.guideStage())
         if Shifts.thisPhoneIsOn(for: baby, at: now) {
             Reminders.scheduleFeed(prediction, babyName: baby.displayName, now: now)
             FeedAlarm.reschedule(lastFeed: last, prediction: prediction, babyName: baby.displayName, now: now, force: true)
@@ -631,6 +642,7 @@ private struct TodayContent: View {
 /// The three Feeds / Diapers / Sleep tiles in a row, top-aligned so the big
 /// numbers line up whatever the titles wrap to; a column once text is large.
 struct StatTiles<Content: View>: View {
+    var columns = 3
     @ViewBuilder let content: Content
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -638,6 +650,8 @@ struct StatTiles<Content: View>: View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 10) { content }
+            } else if columns > 3 {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 10) { content }
             } else {
                 HStack(alignment: .top, spacing: 10) { content }
             }

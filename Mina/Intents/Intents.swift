@@ -262,14 +262,13 @@ struct FeedStatusIntent: AppIntent {
             return .result(dialog: "Yesterday, \(entity.spoken)")
         }
         let now = Date.now
-        let (name, last, lastPoop, summary, ageDays, weight) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, EntrySnapshot?, Date?, DaySummary, Int?, Double?) in
+        let (name, last, lastPoop, summary, ageDays, weight, stageForAge) = try await Logbook.shared.perform(babyID: BabyChoice.resolve(self.baby)) { context, baby -> (String, EntrySnapshot?, Date?, DaySummary, Int?, Double?, GuideStage?) in
             let last = Logbook.shared.lastFeed(for: baby, in: context).map(EntrySnapshot.init)
             let lastPoop = Logbook.shared.lastDirtyDiaper(for: baby, in: context)?.startedAt
             let start = Calendar.current.startOfDay(for: now)
             let entries = Logbook.shared.entries(for: baby, from: Calendar.current.date(byAdding: .day, value: -1, to: start) ?? start, in: context)
-            return (baby.displayName, last, lastPoop, DaySummary(entries: entries, day: now, now: now), baby.ageDays(on: now), Logbook.shared.latestWeightGrams(for: baby, in: context))
+            return (baby.displayName, last, lastPoop, DaySummary(entries: entries, day: now, now: now), baby.ageDays(on: now), Logbook.shared.latestWeightGrams(for: baby, in: context), baby.guideStage(on: now))
         }
-        let stageForAge = ageDays.map(Guidance.stage(forAgeDays:))
         let unit = Prefs.unit
         var text: String
         if let last {
@@ -286,6 +285,7 @@ struct FeedStatusIntent: AppIntent {
             // Pluralised on the day's total, not the dirty count: "1 wet and 0 dirty diaper".
             text += ", \(summary.wet) wet and \(summary.dirty) dirty \(summary.diapers == 1 ? "diaper" : "diapers")."
         }
+        if summary.foods > 0 { text += " Food today: \(Format.count(summary.foods, "entry", "entries"))." }
         if let lastPoop { text += " Last poop \(Format.spokenAgo(from: lastPoop, to: now))." }
         let goals = Goals.evaluate(summary: summary, lastFeed: last?.startedAt, stage: stageForAge, ageDays: ageDays, weightGrams: weight, now: now)
         if !goals.isEmpty { text += " Goals: \(Goals.spoken(goals))." }

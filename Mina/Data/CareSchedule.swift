@@ -42,7 +42,17 @@ enum CareSchedule {
         .init(id: "checkup-18m", kind: .checkup, title: "18-month checkup", detail: "Developmental and autism screening", days: nil, months: 18),
         .init(id: "vaccines-18m", kind: .vaccine, title: "18-month vaccines", detail: "Complete hepatitis A series and any clinician-directed catch-up doses", days: nil, months: 18),
         .init(id: "checkup-24m", kind: .checkup, title: "2-year checkup", detail: "Growth, development and autism screening", days: nil, months: 24),
+        .init(id: "checkup-30m", kind: .checkup, title: "30-month checkup", detail: "Growth and developmental screening", days: nil, months: 30),
+        .init(id: "checkup-36m", kind: .checkup, title: "3-year checkup", detail: "Growth and development; plan ongoing well-child care", days: nil, months: 36),
     ]
+
+    /// A planning reminder the morning before the calendar-based visit date.
+    static func reminderDate(for item: Item, birthDate: Date, now: Date = .now, calendar: Calendar = .current) -> Date? {
+        let due = item.due(from: birthDate, calendar: calendar)
+        guard let day = calendar.date(byAdding: .day, value: -1, to: due),
+              let fire = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day), fire > now else { return nil }
+        return fire
+    }
 
     static var remindersOn: Bool {
         get { Prefs.defaults.bool(forKey: remindersKey) }
@@ -60,9 +70,7 @@ enum CareSchedule {
         guard remindersOn, let birthDate = baby.birthDate else { return }
 
         for item in items where !isDone(item, baby: baby, in: context) {
-            let due = item.due(from: birthDate)
-            guard let reminderDay = Calendar.current.date(byAdding: .day, value: -1, to: due),
-                  let fire = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: reminderDay), fire > now else { continue }
+            guard let fire = reminderDate(for: item, birthDate: birthDate, now: now) else { continue }
             let content = UNMutableNotificationContent()
             content.title = "\(item.title) is coming up"
             content.body = "For \(baby.displayName): \(item.detail). Confirm timing with her clinician."
