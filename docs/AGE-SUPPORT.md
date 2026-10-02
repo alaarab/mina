@@ -66,18 +66,32 @@ Native test output is retained at
 hand-offs rejected stale conversation targets; NAS coordination was queued.
 No SDK build, simulator test or accessibility screenshot is claimed as passed.
 
-After the integrator coordinates capacity and the Mini lane, run:
+Owner priority: **hold Mina simulator/SDK starts on both Macs** until the
+conductor coordinates a quiet CI lane. Do not queue behind CI, move the run to
+MacBook, or reserve capacity. No Mina runner or slot waiter was observed during
+the source-only follow-up; no other job was changed. NAS reports zero heavy jobs
+and no reservations; this is not a Mini slot grant.
+
+Only after conductor/integrator clearance, quiet CI and a fresh disk/load/lock
+preflight, run the one bounded focused serial Mini validation:
 
 ```sh
 xcodegen generate
-python3 scripts/test-age-ios.py
+python3 scripts/test-age-ios.py --coordinated
 ```
 
+The explicit flag records a manual coordination decision; it does not grant a
+lane or bypass the shared lock. Without it, the script refuses to acquire a slot.
+It reports disk/load capacity and refuses any existing shared slot before
+acquisition, without deleting another holder or intentionally queuing behind CI.
 The script checks free space and concurrent Xcode before and inside the shared
 `mini-sim-slot.sh run` lane, verifies its slot holder, uses serial tests, caps each
 test at 180 seconds and the run at 15 minutes, and preserves a fresh result bundle
 and log under the main checkout's `.dd-age-support-20261002`. It refuses to overwrite
 an existing run directory. It cannot build on Linux.
+
+The coordination guard was reviewed with Python AST syntax and whitespace checks
+only. No test execution or SDK/simulator start occurred during the priority hold.
 
 Its exact selected tests are:
 

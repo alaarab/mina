@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One bounded Mini run. Coordinate the shared lane with the integrator first."""
+"""One bounded Mini run, manually cleared by the conductor after CI is quiet."""
 import json
 import os
 from pathlib import Path
@@ -14,21 +14,27 @@ def preflight():
     if sys.platform != 'darwin':
         raise RuntimeError('iOS SDK tests require the shared Mac lane.')
     free = shutil.disk_usage(repo).free / 1024 ** 3
+    print(f'Mini capacity: {free:.2f} GiB free; load {os.getloadavg()}; {os.cpu_count()} CPUs.', flush=True)
     if free < 20:
         raise RuntimeError(f'Mini has {free:.2f} GiB free; at least 20 GiB is required. No Xcode started.')
-    processes = subprocess.run(['pgrep', '-fl', '[x]codebuild.*(test|build|archive)'], capture_output=True, text=True)
+    processes = subprocess.run(['pgrep', '-fl', '[x]codebuild'], capture_output=True, text=True)
     if processes.returncode != 1:
         raise RuntimeError('Xcode lane is occupied or the process check failed: ' + (processes.stdout + processes.stderr).strip())
 
 try:
+    coordinated = sys.argv[1:] == ['--coordinated']
+    locked = len(sys.argv) == 3 and sys.argv[1] == '--locked'
+    if not coordinated and not locked:
+        raise RuntimeError('Mina native work is on hold. Only after conductor coordination and quiet CI, invoke with --coordinated. Capacity alone is not a lane grant.')
     preflight()
-    if len(sys.argv) == 1:
+    if coordinated:
+        for lock in ['/tmp/phren-ios-build.lock', '/tmp/phren-ios-build-2.lock']:
+            if os.path.lexists(lock):
+                raise RuntimeError(f'Shared Mini lane occupied: {lock}. Do not queue behind CI or reclaim its slot.')
         slot = Path.home() / '.phren/global/skills/test-machines/scripts/mini-sim-slot.sh'
         if not slot.is_file():
             raise RuntimeError('Shared Mini slot script is unavailable.')
         raise SystemExit(subprocess.run([str(slot), 'run', sys.executable, str(Path(__file__).resolve()), '--locked', '{udid}'], cwd=repo).returncode)
-    if len(sys.argv) != 3 or sys.argv[1] != '--locked':
-        raise RuntimeError('Run without arguments through the shared Mini lane.')
     holder = Path('/tmp/phren-ios-build.lock/holder.json')
     other = Path('/tmp/phren-ios-build-2.lock/holder.json')
     owned = False
@@ -37,7 +43,7 @@ try:
             record = json.loads(path.read_text())
             owned = owned or (record.get('pid') == os.getppid() and record.get('device') == sys.argv[2])
     if not owned:
-        raise RuntimeError('A live shared Mini slot holder is required; run without --locked.')
+        raise RuntimeError('A live shared Mini slot holder is required; use --coordinated only after conductor clearance.')
     common = subprocess.check_output(['git', 'rev-parse', '--git-common-dir'], cwd=repo, text=True).strip()
     common = (repo / common).resolve()
     evidence = common.parent / '.dd-age-support-20261002'
