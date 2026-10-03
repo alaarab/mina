@@ -14,6 +14,8 @@ enum AskContext {
             lines.append("Feeding notes: " + stage.feeding.joined(separator: " "))
             lines.append("Sleep notes: " + stage.sleep.joined(separator: " "))
             lines.append("Watch for: " + stage.watchFor.joined(separator: " "))
+            let help = stage.startMonth == nil ? Guidance.callTheDoctor : Guidance.olderCallTheDoctor
+            lines.append("When to get help: " + help.joined(separator: " "))
         }
         lines.append("Daily totals, oldest first (day: milk feeds, food entries, bottle, nursing min, wet, dirty, sleep, longest sleep):")
         for stat in stats {

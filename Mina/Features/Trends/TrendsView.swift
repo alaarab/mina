@@ -71,7 +71,7 @@ struct TrendsView: View {
                             .minaCard(padding: 12)
                     }
                     weekSummary(week)
-                    if week.contains(where: { $0.summary.foods > 0 }) || (baby.guideStage()?.startMonth ?? 0) >= 6 {
+                    if stats.contains(where: { $0.summary.foods > 0 }) || (baby.guideStage()?.startMonth ?? 0) >= 6 {
                         foodChart(stats)
                     }
                     feedChart(stats)
