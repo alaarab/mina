@@ -121,9 +121,34 @@ submission, release upload, merge, deployment or Hook restart was performed.
 ## Local review hand-off
 
 Implementation commit: `dbeea4bcda53c727245c6569c4d9bc7f3ef8bda2`.
-The feature branch is local. Automatic approval review rejected its remote push
+At the first hand-off, the feature branch was local. Automatic approval review rejected its remote push
 because pushing publishes repository contents and the brief prohibits publishing.
 No remote branch or PR was created. Draft PR text is retained in the main
 checkout's `.dd-age-core-evidence-20261002/draft-pr.md` for integration review.
 `dispatch_report` identifies the repository as context and explicitly reports
 local-only evidence; that repository URL is not a live PR.
+
+## Owner-authorized source integration review
+
+The owner subsequently authorized main integration only, keeping all SDK,
+simulator, test, queue and reservation holds on both Macs. Remote main was fetched
+and remained `f52af402255b2dbc35a39ffb6c5d161baf64c1b9`; both checkouts were clean.
+The reviewed branch includes implementation `dbeea4b`, evidence `65287d7` and
+the explicit coordination guard `d3d6742`, without changing any owner work.
+
+Source review traced app/widget/Siri age consumers, optional expectations,
+prediction and personal-target behavior, birthday reminder refresh, growth
+boundaries, food totals/export, accessibility, target source membership and new
+test definitions. It restored the existing newborn help guidance to Ask's context
+while supplying the older guidance only to older stages. The 14-day food chart
+now checks all 14 days, so food in the earlier week remains visible even after a
+birthday correction places the child below six months.
+
+GitHub main has no branch protection or ruleset requiring native acceptance;
+the repository has no external webhook or native-test workflow. The only
+GitHub workflow is its existing Pages deployment. No local Git hook starts tests.
+The source review found no remaining blocker to the explicitly authorized source
+integration. **No new tests or builds ran**: the prior eight Foundation passes
+remain the executed evidence, and all 22 focused iOS checks remain pending.
+Integration does not establish iOS type-check, UI, sync or production readiness.
+The owner task remains Active until the separately coordinated acceptance.
