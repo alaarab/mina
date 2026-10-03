@@ -82,16 +82,27 @@ python3 scripts/test-age-ios.py --coordinated
 
 The explicit flag records a manual coordination decision; it does not grant a
 lane or bypass the shared lock. Without it, the script refuses to acquire a slot.
-It reports disk/load capacity and refuses any existing shared slot before
-acquisition, without deleting another holder or intentionally queuing behind CI.
-The script checks free space and concurrent Xcode before and inside the shared
-`mini-sim-slot.sh run` lane, verifies its slot holder, uses serial tests, caps each
+It reports disk/load capacity and uses the shared helper's OS guard with
+`LOCK_EX | LOCK_NB`. While holding that guard, it refuses any existing slot and
+claims both configured reservation entries for one exclusive Mini run; only the
+first simulator is used. This prevents a second shared-slot job from starting
+Xcode during the run. It never calls the helper's blocking acquire/run/release,
+waits for a slot or reclaims another holder. The shared helper is unchanged.
+The script checks free space and concurrent Xcode before and after the atomic
+claim, uses `xcodebuild -jobs 2` and serial tests, caps each
 test at 180 seconds and the run at 15 minutes, and preserves a fresh result bundle
 and log under the main checkout's `.dd-age-support-20261002`. It refuses to overwrite
 an existing run directory. It cannot build on Linux.
 
+Release checks both records' PID, process-start identity and unique Mina token
+under the same nonwaiting guard, then removes only those exact records and empty
+directories. A busy guard, changed holder or unexpected file leaves the affected
+reservation for inspection rather than waiting or deleting unrelated work.
+
 The coordination guard was reviewed with Python AST syntax and whitespace checks
-only. No test execution or SDK/simulator start occurred during the priority hold.
+only. No test execution, lock/slot claim or SDK/simulator start occurred during
+the priority hold. Its runtime acquisition and release remain unverified until
+separately authorized acceptance.
 
 Its exact selected tests are:
 
@@ -152,3 +163,18 @@ integration. **No new tests or builds ran**: the prior eight Foundation passes
 remain the executed evidence, and all 22 focused iOS checks remain pending.
 Integration does not establish iOS type-check, UI, sync or production readiness.
 The owner task remains Active until the separately coordinated acceptance.
+
+## Independent lane-guard review follow-up
+
+The owner relayed two valid findings: serial test execution did not cap Xcode
+compilation, and the old empty-slot check followed by shared-helper `run` could
+race into the helper's sleeping acquisition loop. Source now explicitly caps
+compilation at two jobs and atomically takes an exclusive, nonwaiting shared-lane
+claim as described above. Existing result bundles and other projects are untouched.
+
+The exact reviewed starting head was `7bf68c41f27b045e55389b433c1b4b2b3574d620`
+on main, origin/main and the isolated branch. `d3d6742` introduced the manual
+coordination/precheck guard; `65287d7` was the earlier evidence commit, not a later
+guard version. Main already included both plus `7bf68c4`'s app-source fixes.
+These new guard changes are source-only integration under the owner's renewed
+authorization. All native holds and the 22 unexecuted native checks remain.
