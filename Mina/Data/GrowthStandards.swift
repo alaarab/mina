@@ -30,7 +30,7 @@ enum GrowthStandards {
         guard let birthDate, let measuredAt = entry.startedAt else { return [] }
         // Calendar anniversaries preserve the exact 24-month boundary,
         // including birthdays spanning a leap day. Future birthdays have no percentile.
-        guard let months = ChildAge.months(birthDate: birthDate, on: measuredAt, calendar: calendar) else { return [] }
+        guard let months = ChildAge.months(birthDate: birthDate, on: measuredAt, calendar: calendar), months <= 24 else { return [] }
         var output: [Result] = []
         if entry.weightGrams > 0, let p = percentile(value: entry.weightGrams / 1000, ageMonths: months, table: weight) {
             output.append(.init(kind: .weight, percentile: p))
