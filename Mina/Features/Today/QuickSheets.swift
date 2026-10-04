@@ -1,3 +1,4 @@
+import CoreData
 import SwiftUI
 
 /// The sheets behind the Today buttons: a bottle, a nursing session or timer, a

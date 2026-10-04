@@ -1,5 +1,6 @@
 import AppIntents
 import CloudKit
+import CoreData
 import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
