@@ -52,6 +52,7 @@ struct CareScheduleView: View {
                     .accessibilityLabel(item.title)
                     .accessibilityValue([done ? "done" : "not done", baby.birthDate.map { item.due(from: $0).formatted(date: .abbreviated, time: .omitted) }, item.detail].compactMap { $0 }.joined(separator: ", "))
                     .accessibilityHint(done ? "Removes completion from her log" : "Logs completion with today's date")
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityAddTraits(done ? .isSelected : [])
                     .id(item.id)
                 }
