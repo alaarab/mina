@@ -1,0 +1,4 @@
+# Python 3.10+ tooling; the iOS app has no third-party runtime dependencies.
+# Regenerate: uv pip compile requirements.in --upgrade --universal --python-version 3.10 --generate-hashes --output-file requirements.txt
+Pillow==12.3.0
+PyJWT[crypto]==2.15.1

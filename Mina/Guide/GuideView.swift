@@ -36,7 +36,7 @@ struct GuideView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     stagePicker
                     headlineCard
-                    NavigationLink { CareScheduleView(baby: baby) } label: {
+                    NavigationLink { CareScheduleView(baby: baby, initialMonth: stage.startMonth) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "calendar.badge.clock").foregroundStyle(MinaTheme.note)
                             VStack(alignment: .leading, spacing: 2) {

@@ -29,16 +29,12 @@ targets:
       - path: Mina
         excludes:
           - "**/.DS_Store"
+          - "Resources/CHANGELOG.md"
       # Widget and Control Center intents are LiveActivityIntents, performed in
       # the app's process, so the app target compiles them too.
       - path: MinaWidgets/WidgetIntents.swift
-    preBuildScripts:
-      - name: Bundle changelog
-        script: cp "$SRCROOT/CHANGELOG.md" "$SRCROOT/Mina/Resources/CHANGELOG.md"
-        inputFiles:
-          - $(SRCROOT)/CHANGELOG.md
-        outputFiles:
-          - $(SRCROOT)/Mina/Resources/CHANGELOG.md
+      - path: CHANGELOG.md
+        buildPhase: resources
     info:
       path: Mina/Resources/Info.plist
       properties:

@@ -31,6 +31,23 @@ xcodebuild -project Mina.xcodeproj -scheme Mina -destination 'generic/platform=i
 
 Tests: `xcodebuild -project Mina.xcodeproj -scheme Mina -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test`.
 
+The Python icon and App Store Connect tools need Python 3.10+ and the locked
+dependencies below. The iOS app uses only Apple frameworks; there are no Swift
+package or JavaScript dependencies.
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements.txt
+.venv/bin/python scripts/make-appicon.py
+```
+
+`PyJWT[crypto]` includes the ES256 signing support used by the App Store Connect
+tools. Regenerate the lockfile with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv pip compile requirements.in --upgrade --universal --python-version 3.10 --generate-hashes --output-file requirements.txt
+```
+
 ## First run on two phones
 
 1. One parent opens the app, enters the name and birthday, and taps **Start**.
