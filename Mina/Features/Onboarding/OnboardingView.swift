@@ -1,3 +1,4 @@
+import CoreData
 import SwiftUI
 
 /// The first screen on a fresh install: a name, a birthday, and one button that

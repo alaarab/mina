@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix='mina-age-core-') as directory:
     tests.mkdir(parents=True)
     (root / 'Package.swift').write_text('''// swift-tools-version: 5.9
 import PackageDescription
-let package = Package(name: "MinaAgeCore", products: [], targets: [
+let package = Package(name: "MinaAgeCore", platforms: [.macOS(.v12)], products: [], targets: [
     .target(name: "MinaAgeCore"),
     .testTarget(name: "MinaAgeCoreTests", dependencies: ["MinaAgeCore"], swiftSettings: [.define("MINA_AGE_CORE")])
 ])
