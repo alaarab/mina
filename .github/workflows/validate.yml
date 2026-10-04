@@ -1,0 +1,57 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    name: Python tooling
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --require-hashes -r requirements.txt
+      - run: python -m pip check
+      - run: python scripts/check-tooling.py
+      - run: git diff --check
+
+  ios:
+    name: App build and all simulator tests
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Foundation tests
+        run: python3 scripts/test-age-core.py
+      - name: Build app, widgets and watch; run all unit and UI tests
+        run: |
+          set -o pipefail
+          xcodebuild test -project Mina.xcodeproj -scheme AgeSupport \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -derivedDataPath "$RUNNER_TEMP/MinaDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/Mina.xcresult" \
+            -jobs 2 -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=MINATEST01 \
+            2>&1 | tee "$RUNNER_TEMP/mina-xcode.log"
+      - name: Test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simulator-results
+          path: |
+            ${{ runner.temp }}/Mina.xcresult
+            ${{ runner.temp }}/mina-xcode.log
