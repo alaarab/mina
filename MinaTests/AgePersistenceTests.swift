@@ -75,7 +75,8 @@ final class AgePersistenceTests: XCTestCase {
         let log = Logbook(persistence: persistence)
         let today = try date(2026, 3, 8) // DST day, 23 hours long
         let baby = try log.createBaby(name: "Mina", birthDate: try date(2024, 3, 8), in: context)
-        for offset in [-3600.0, 3600, 7200, 23 * 3600] {
+        let offsets: [TimeInterval] = [-3600, 3600, 7200, 23 * 3600]
+        for offset in offsets {
             var food = EntryDraft(kind: .solid, startedAt: today.addingTimeInterval(offset))
             food.label = SolidMetadata.encode(food: "Egg on toast", allergens: ["Egg", "Wheat"])
             try log.add(food, to: baby, in: context, save: false)
@@ -96,7 +97,7 @@ final class AgePersistenceTests: XCTestCase {
         XCTAssertTrue(WeeklyDigest.text(this: digest, last: nil, unit: .ounces, babyName: "Mina").contains("2 food entries"))
         let data = try Backup.exportData(baby: baby, in: context)
         let other = PersistenceController(inMemory: true)
-        let target = try Logbook(persistence: other).createBaby(name: "Mina", birthDate: baby.birthDate, in: other.container.viewContext)
+        let target = try Logbook(persistence: other).createBaby(name: "Mina", birthDate: XCTUnwrap(baby.birthDate), in: other.container.viewContext)
         XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 5)
         XCTAssertEqual(try Backup.importData(data, into: target, in: other.container.viewContext), 0)
         let imported = Logbook(persistence: other).entries(for: target, from: .distantPast, in: other.container.viewContext)
