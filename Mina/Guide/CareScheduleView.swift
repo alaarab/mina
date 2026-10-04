@@ -3,18 +3,21 @@ import SwiftUI
 
 struct CareScheduleView: View {
     @ObservedObject var baby: Baby
+    private let initialMonth: Int?
     @Environment(\.managedObjectContext) private var context
     @FetchRequest private var completed: FetchedResults<LogEntry>
     @State private var error: String?
 
-    init(baby: Baby) {
+    init(baby: Baby, initialMonth: Int? = nil) {
         _baby = ObservedObject(wrappedValue: baby)
+        self.initialMonth = initialMonth
         let request = LogEntry.request()
         request.predicate = NSPredicate(format: "baby == %@ AND kindRaw IN %@", baby, [EntryKind.vaccine.rawValue, EntryKind.checkup.rawValue])
         _completed = FetchRequest(fetchRequest: request, animation: .default)
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             Section {
                 Text("A planning checklist based on U.S. CDC and AAP schedules. Timing and needed doses vary; confirm every item with her clinician.")
@@ -50,6 +53,7 @@ struct CareScheduleView: View {
                 .accessibilityValue([done ? "done" : "not done", baby.birthDate.map { item.due(from: $0).formatted(date: .abbreviated, time: .omitted) }, item.detail].compactMap { $0 }.joined(separator: ", "))
                 .accessibilityHint(done ? "Removes completion from her log" : "Logs completion with today's date")
                 .accessibilityAddTraits(.isToggle)
+                .id(item.id)
             }
         }
         .listStyle(.insetGrouped)
@@ -58,5 +62,12 @@ struct CareScheduleView: View {
         .navigationTitle("Visits & vaccines")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert($error)
+        .onAppear {
+            if let initialMonth,
+               let item = CareSchedule.items.first(where: { ($0.months ?? 0) >= initialMonth }) {
+                proxy.scrollTo(item.id, anchor: .top)
+            }
+        }
+        }
     }
 }
