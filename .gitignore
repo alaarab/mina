@@ -4,6 +4,8 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 .swiftpm/
+.venv/
+__pycache__/
 
 Mina/Resources/Info.plist
 Mina/Resources/Mina.entitlements
