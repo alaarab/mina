@@ -36,9 +36,10 @@ struct MinaApp: App {
                 FeedAlarm.cancel()
             }
         }
-        Logbook.timerChanged = { snapshot, ended in
-            Task { @MainActor in await CareTimerActivities.handle(snapshot, ended: ended) }
+        Logbook.timerChanged = { _, _ in
+            Task { @MainActor in CareTimerActivities.refresh() }
         }
+        CareTimerActivities.start()
         Self.startRecoveryExportIfNeeded(persistence: persistence)
     }
 
@@ -77,7 +78,9 @@ struct MinaApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active: if FeatureFlags.nanit { Task { await NanitSync.shared.sync() } }
+            case .active:
+                CareTimerActivities.refresh()
+                if FeatureFlags.nanit { Task { await NanitSync.shared.sync() } }
             case .background: if FeatureFlags.nanit { NanitSync.scheduleBackgroundRefresh() }
             default: break
             }
@@ -131,7 +134,7 @@ struct RootView: View {
                 MainTabs(baby: baby).id(baby.objectID)
                     .task { WatchBridge.shared.refresh(for: baby, in: context) }
                     .task { WeeklyDigest.schedule(for: baby, in: context) }
-                    .task { await CareTimerActivities.reconcile(for: baby, in: context) }
+                    .task { CareTimerActivities.refresh() }
                     .task { PartnerAlerts.shared.removeCloudSubscriptionIfPresent() }
             } else {
                 OnboardingView()
