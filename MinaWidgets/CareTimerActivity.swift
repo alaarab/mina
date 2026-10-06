@@ -11,8 +11,8 @@ struct CareTimerActivity: Widget {
                     .font(.title2)
                     .foregroundStyle(color(context.attributes.kind))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title(context.attributes.kind, babyName: context.attributes.babyName)).font(.headline)
-                    Text(timerInterval: context.state.startedAt...Date.distantFuture, countsDown: false)
+                    Text(context.isStale ? "Open Mina to check this timer" : title(context.attributes.kind, babyName: context.attributes.babyName)).font(.headline)
+                    Text(timerInterval: context.state.startedAt...context.state.startedAt.addingTimeInterval(8 * 60 * 60), countsDown: false)
                         .font(.subheadline).monospacedDigit()
                     Text(context.state.detail).font(.caption).foregroundStyle(.secondary)
                 }
@@ -30,7 +30,7 @@ struct CareTimerActivity: Widget {
                     Text(title(context.attributes.kind, babyName: context.attributes.babyName))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(timerInterval: context.state.startedAt...Date.distantFuture, countsDown: false).monospacedDigit()
+                    Text(timerInterval: context.state.startedAt...context.state.startedAt.addingTimeInterval(8 * 60 * 60), countsDown: false).monospacedDigit()
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(context.state.detail).font(.caption).foregroundStyle(.secondary)
@@ -38,8 +38,13 @@ struct CareTimerActivity: Widget {
             } compactLeading: {
                 Image(systemName: symbol(context.attributes.kind)).foregroundStyle(color(context.attributes.kind))
             } compactTrailing: {
-                Text(timerInterval: context.state.startedAt...Date.distantFuture, countsDown: false)
-                    .monospacedDigit().frame(width: 44)
+                if context.isStale {
+                    Image(systemName: "clock.badge.questionmark")
+                } else {
+                    Text(timerInterval: context.state.startedAt...context.state.startedAt.addingTimeInterval(8 * 60 * 60), countsDown: false, showsHours: true)
+                        .font(.system(size: 12, weight: .medium)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7).frame(width: 56)
+                }
             } minimal: {
                 Image(systemName: symbol(context.attributes.kind)).foregroundStyle(color(context.attributes.kind))
             }

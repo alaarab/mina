@@ -21,6 +21,8 @@ struct SettingsView: View {
     @AppStorage(Prefs.nameKey, store: Prefs.defaults) private var yourName = ""
     @AppStorage(Prefs.unitKey, store: Prefs.defaults) private var unitRaw = VolumeUnit.ounces.rawValue
     @AppStorage(Prefs.bodyUnitKey, store: Prefs.defaults) private var bodyUnitRaw = BodyUnit.imperial.rawValue
+    @AppStorage(CareTimerPolicy.sleepKey, store: Prefs.defaults) private var sleepActivity = false
+    @AppStorage(CareTimerPolicy.nursingKey, store: Prefs.defaults) private var nursingActivity = false
     @State private var name: String
     @State private var birthDate: Date
     @State private var siriTipVisible = true
@@ -128,6 +130,23 @@ struct SettingsView: View {
                     Text("Sharing")
                 } footer: {
                     Text("Both phones need to be signed in to iCloud. Send the invite by Messages; when your partner opens it, Mina opens with the same log and every entry syncs both ways.")
+                }
+
+                Section {
+                    Toggle("Show sleep timer in Dynamic Island", isOn: $sleepActivity)
+                        .onChange(of: sleepActivity) { _, enabled in
+                            CareTimerPolicy(defaults: Prefs.defaults, deviceID: Prefs.deviceID).setEnabled(enabled, for: .sleep)
+                            CareTimerActivities.refresh()
+                        }
+                    Toggle("Show nursing timer in Dynamic Island", isOn: $nursingActivity)
+                        .onChange(of: nursingActivity) { _, enabled in
+                            CareTimerPolicy(defaults: Prefs.defaults, deviceID: Prefs.deviceID).setEnabled(enabled, for: .nursing)
+                            CareTimerActivities.refresh()
+                        }
+                } header: {
+                    Text("Live Activities")
+                } footer: {
+                    Text("Shows new timers started on this phone for the selected baby, for up to 8 hours. Timers also appear on the Lock Screen. Turning this off removes them immediately.")
                 }
 
                 Section {
