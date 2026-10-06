@@ -2,6 +2,13 @@
 
 Newest first. The version is the release (1.0.0, 1.0.1, ...); the build number counts uploads. The in-app "What's new" reads this file; keep entries short and about what a parent notices.
 
+## 1.1.1
+
+### Fixed
+- Sleep and nursing timers stay off the Dynamic Island and Lock Screen unless you turn them on in Settings.
+- Old sleep entries no longer restart a Live Activity. Ending a sleep on either phone dismisses its activity after sync.
+- Compact timers fit the Dynamic Island without a truncated count.
+
 ## 1.1.0
 
 ### New

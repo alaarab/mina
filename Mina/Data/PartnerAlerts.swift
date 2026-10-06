@@ -100,6 +100,7 @@ final class PartnerAlerts {
                 for transaction in foreign {
                     viewContext.mergeChanges(fromContextDidSave: transaction.objectIDNotification())
                 }
+                Task { @MainActor in CareTimerActivities.refresh() }
             }
             // A feed from the other phone moves the alarm, even if Today isn't
             // on screen; the widgets and the digest follow the same entries.
