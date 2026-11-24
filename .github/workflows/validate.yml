@@ -55,3 +55,4 @@ jobs:
           path: |
             ${{ runner.temp }}/Mina.xcresult
             ${{ runner.temp }}/mina-xcode.log
+          retention-days: 1
